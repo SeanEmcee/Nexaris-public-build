@@ -16,11 +16,15 @@ An actual build checks out the private Nexaris branch `feature/nexaris-unified-a
 
 Configure these in **this public build repository** at `Settings → Secrets and variables → Actions → New repository secret`. Never paste the values into a public file or chat.
 
-1. `NEXARIS_PRIVATE_SOURCE_TOKEN` — GitHub token with **Contents: Read** for **SeanEmcee/Nexaris** (private source checkout).
-2. `NEXARIS_UPSTREAM_GITHUB_TOKEN` — token with access to download the original upstream Nyxian CoreCompiler GitHub Actions artifact. Use the same authorized credential already working in Codemagic, if its access remains valid.
-3. `NEXARIS_PRIVATE_OUTPUT_TOKEN` — GitHub token with **Contents: Read and write** on **SeanEmcee/Nexaris only**, for creating a draft release there with build logs and the unsigned IPA.
+**One broad token is enough to start:** add `NEXARIS_UPSTREAM_GITHUB_TOKEN` to this repository's Actions secrets. The workflow uses it for the pinned upstream compiler, private Nexaris checkout and private draft release **if it also has access to all three**. It checks for the secret before scheduling macOS.
 
-All three are checked **before** any macOS runner starts. A missing credential fails the cheap Linux preflight.
+**Safer long-term option (recommended):** use three separately scoped credentials so a token cannot access more than necessary:
+
+1. `NEXARIS_PRIVATE_SOURCE_TOKEN` — **Contents: Read** on private `SeanEmcee/Nexaris`.
+2. `NEXARIS_UPSTREAM_GITHUB_TOKEN` — **Actions: Read** access for the upstream Nyxian artifact.
+3. `NEXARIS_PRIVATE_OUTPUT_TOKEN` — **Contents: Read and write** on private `SeanEmcee/Nexaris` for draft release output.
+
+The private-source and private-output secrets override the shared token automatically when present. If you generated an all-permissions token, rotate it to narrowly scoped tokens after confirming the pipeline works. **Do not disclose the token or print it in logs.**
 
 ### Run
 
