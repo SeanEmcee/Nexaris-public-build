@@ -1,0 +1,256 @@
+name: Nexaris private-source compile on public runners
+
+# Only the tiny billing smoke check runs on push.
+# Full unsigned iOS build only runs by manual workflow_dispatch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/nexaris-private-compile.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexaris-private-source-builds
+  cancel-in-progress: false
+
+jobs:
+  public-runner-smoke:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm that public GitHub Actions actually runs
+        run: |
+          echo "PUBLIC RUNNER OK. No secrets, private source, binaries or artifacts used."
+          echo "This verifies runner/billing access only, not a Nexaris build."
+
+  private-preflight:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Require all private-access and output secrets before macOS
+        shell: bash
+        env:
+          NEXARIS_PRIVATE_SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN }}
+          NEXARIS_UPSTREAM_GITHUB_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          NEXARIS_PRIVATE_OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN }}
+        run: |
+          set -euo pipefail
+          for name in NEXARIS_PRIVATE_SOURCE_TOKEN NEXARIS_UPSTREAM_GITHUB_TOKEN NEXARIS_PRIVATE_OUTPUT_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing GitHub Actions secret $name (see README)."
+              exit 2
+            fi
+          done
+          echo "Required secrets configured (values not printed)."
+      - name: Checkout private branch without exposing or persisting its token
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/nexaris-unified-app
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN }}
+          persist-credentials: false
+          submodules: recursive
+          path: source
+      - name: Run targeted Build 23 tests before paying for macOS time
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          for suite in \
+            test_nexaris_metal_toolchain_preflight.py \
+            test_nexaris_nyxian_ipa_validator.py \
+            test_nexaris_rapkeys_globe_launch_repair.py \
+            test_nexaris_sideinstaller_modulemap_collision.py \
+            test_nexaris_signed_keyboard_info_guard.py \
+            test_nexaris_codemagic_native_cache.py \
+            test_nexaris_single_keyboard_compile.py \
+            test_nexaris_sideinstaller_ffi_cache.py; do
+            if ! python3 -m unittest discover -s scripts/tests -p "$suite" \
+              > "build/test-$suite.log" 2>&1; then
+              echo "::error::Private test suite $suite failed. No private logs uploaded publicly."
+              exit 1
+            fi
+            echo "PASS $suite"
+          done
+
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    needs: private-preflight
+    runs-on: macos-26-intel
+    timeout-minutes: 120
+    env:
+      NEXARIS_ENABLE_NATIVE_NYXIAN: "1"
+      NEXARIS_ENABLE_NATIVE_LIVEPROCESS: "0"
+      NEXARIS_ENABLE_GUEST_PROBE: "0"
+      NEXARIS_FIRST_COMPILE: "1"
+      NEXARIS_BUILD_MODE: "full"
+      NEXARIS_KEYBOARD_COMPILE_FIRST: "0"
+      NEXARIS_CACHE_PRIME_ONLY: "0"
+      NEXARIS_UPSTREAM_GITHUB_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - name: Checkout original private Nexaris without publishing it
+        id: private_checkout
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/nexaris-unified-app
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN }}
+          submodules: recursive
+          persist-credentials: false
+          path: source
+      - name: Select Xcode 26.6 matching the successful Codemagic compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.6.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          echo "Xcode 26.6 selected for real iPhoneOS build."
+      # Only cache public Cargo registry downloads. Private source,
+      # proprietary compiler artifacts and Xcode outputs must not enter
+      # a publicly accessible repository cache or Actions artifact.
+      - name: Restore public Cargo dependencies
+        uses: actions/cache/restore@v4
+        with:
+          key: nexaris-public-crates-x266-v1-${{ github.run_id }}
+          restore-keys: |
+            nexaris-public-crates-x266-v1-
+          path: ~/.cargo/registry
+      - name: Prepare XcodeGen, iPhoneOS Metal, Rust and link dependencies
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          export PATH="$HOME/.cargo/bin:$PATH"
+          missing=()
+          for tool in xcodegen libarchive ldid; do
+            if ! brew list --versions "$tool" >/dev/null 2>&1; then
+              missing+=("$tool")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            brew install "${missing[@]}"
+          fi
+          if ! command -v cargo >/dev/null || ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --location https://sh.rustup.rs -o /tmp/nexaris-rustup.sh
+            sh /tmp/nexaris-rustup.sh -y --profile minimal --no-modify-path
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup target add aarch64-apple-ios
+          python3 scripts/ensure_nexaris_metal_toolchain.py \
+            > build/Nexaris-metal.log 2>&1 || {
+              echo "::error::Missing Metal toolchain; details stored privately after this job."
+              exit 1
+            }
+          echo "Native tool prerequisites ready."
+      - name: Validate SHA-pinned upstream CoreCompiler and native arm64 links
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          {
+            python3 scripts/prepare_nexaris_nyxian_runtime.py --prebuilt-only
+            python3 scripts/check_nexaris_nyxian_runtime_dependencies.py
+            python3 scripts/probe_nexaris_corecompiler_header_import.py
+            python3 scripts/probe_nexaris_nyxian_libarchive_links.py
+          } > build/Nexaris-native-preflight.log 2>&1 || {
+            echo "::error::Native compiler or linker preflight failed; log remains private."
+            exit 1
+          }
+          echo "Private pinned compiler and ARM64 preflight passed."
+      - name: Compile original Nexaris app, Nyxian and embedded Rap Keys
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          status=0
+          bash scripts/build_nexaris_ios.sh \
+            > build/Nexaris-native-build.log 2>&1 || status=$?
+          python3 scripts/summarize_nexaris_native_build.py \
+            build/Nexaris-native-build.log --exit-code "$status" \
+            --output build/Nexaris-native-diagnostics.json \
+            > /dev/null 2>&1 || true
+          if (( status != 0 )); then
+            echo "::error::Native build failed; the private release contains diagnostics."
+            exit "$status"
+          fi
+          echo "Native Xcode compilation and postbuild checks passed."
+      - name: Package real unsigned IPA, validate the ZIP and checksum
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          app=build/DerivedData/Build/Products/Release-iphoneos/Nexaris.app
+          {
+            python3 scripts/verify_nexaris_nyxian_artifact.py --app "$app"
+            python3 scripts/verify_nexaris_keyboard_bundle.py --app "$app"
+          } > build/Nexaris-package-checks.log 2>&1 || {
+            echo "::error::Native ROM or keyboard bundle validation failed."
+            exit 1
+          }
+          mkdir -p build/nexaris-private-payload/Payload
+          ditto "$app" \
+            build/nexaris-private-payload/Payload/Nexaris.app
+          ( cd build/nexaris-private-payload &&
+            ditto -c -k --sequesterRsrc --keepParent Payload \
+              ../Nexaris-Nyxian-private-unsigned.ipa )
+          python3 scripts/verify_nexaris_ipa_archive.py \
+            build/Nexaris-Nyxian-private-unsigned.ipa --variant nyxian \
+            >> build/Nexaris-package-checks.log 2>&1
+          ( cd build && shasum -a 256 Nexaris-Nyxian-private-unsigned.ipa \
+            > Nexaris-Nyxian-private-unsigned.ipa.sha256 )
+          echo "Verified unsigned IPA packaged locally, NOT publicly published."
+      - name: Save only public Cargo crate downloads for later jobs
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          key: nexaris-public-crates-x266-v1-${{ github.run_id }}
+          path: ~/.cargo/registry
+      # DO NOT upload private logs or IPA as public Actions artifacts.
+      # Store them as a DRAFT release of the original PRIVATE repository.
+      - name: Deliver logs and IPA privately as a draft release
+        if: always() && steps.private_checkout.outcome == 'success'
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN }}
+        run: |
+          set -euo pipefail
+          files=()
+          for f in \
+            build/Nexaris-metal.log \
+            build/Nexaris-native-preflight.log \
+            build/Nexaris-native-build.log \
+            build/Nexaris-native-diagnostics.json \
+            build/Nexaris-package-checks.log \
+            build/Nexaris-Nyxian-private-unsigned.ipa \
+            build/Nexaris-Nyxian-private-unsigned.ipa.sha256; do
+            if [[ -s "$f" ]]; then files+=("$f"); fi
+          done
+          if (( ${#files[@]} == 0 )); then
+            echo "No build output to deliver."
+            exit 0
+          fi
+          tag="nexaris-actions-$GITHUB_RUN_ID"
+          source_sha="$(git rev-parse HEAD)"
+          gh release create "$tag" "${files[@]}" \
+            --repo SeanEmcee/Nexaris --target "$source_sha" \
+            --title "Nexaris private CI #$GITHUB_RUN_ID" --draft \
+            --notes "Private unsigned build output. Original source commit: $source_sha. Signed device installation and ROM execution NOT verified."
+          echo "Output stored as a draft release inside the PRIVATE Nexaris repository."
