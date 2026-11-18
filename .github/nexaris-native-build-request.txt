@@ -1,2 +1,4 @@
 Nexaris private native ROM+RapKeys compile requested from public macOS runners.
 Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
+
+Re-run after YAML fix: validate private source access, pinned upstream compiler, and native iOS build.
