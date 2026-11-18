@@ -70,6 +70,7 @@ jobs:
           for suite in \
             test_nexaris_metal_toolchain_preflight.py \
             test_nexaris_nyxian_ipa_validator.py \
+            test_nexaris_nyxian_public_c_abi.py \
             test_nexaris_rapkeys_globe_launch_repair.py \
             test_nexaris_sideinstaller_modulemap_collision.py \
             test_nexaris_signed_keyboard_info_guard.py \
