@@ -1,6 +1,5 @@
 Nexaris private native ROM+RapKeys compile requested from public macOS runners.
 Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
 
-Build request: native URL OS 6.4.4 library UI parity, user-requested keyboard previews across all five tabs, swipe-to-dismiss native sheets, Nyxian recovery TWRP XML resources, ROM onboarding improvements and keyboard/LiveProcess diagnostics.
-Private source branch: feature/nexaris-unified-app
-Private source commit: 84f1fda023423dd3bce016b44383a461eff74281
+Build: link SwiftLlama v1.2.0 to host, require local GGUF model engine at compile time; preserve separate keyboard handoff, and address earlier Rap Keys preflight test. Also includes full five-tab keyboard previews, URL OS UI changes and Nyxian recovery XML assets.
+Private source: feature/nexaris-unified-app @ 7701bddbc70c8ecf843287d2f8af555165a14f58
