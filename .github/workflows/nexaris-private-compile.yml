@@ -28,16 +28,16 @@ jobs:
           echo "This verifies runner/billing access only, not a Nexaris build."
 
   private-preflight:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.actor == 'SeanEmcee'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Require all private-access and output secrets before macOS
         shell: bash
         env:
-          NEXARIS_PRIVATE_SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN }}
+          NEXARIS_PRIVATE_SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           NEXARIS_UPSTREAM_GITHUB_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
-          NEXARIS_PRIVATE_OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN }}
+          NEXARIS_PRIVATE_OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           for name in NEXARIS_PRIVATE_SOURCE_TOKEN NEXARIS_UPSTREAM_GITHUB_TOKEN NEXARIS_PRIVATE_OUTPUT_TOKEN; do
@@ -52,7 +52,7 @@ jobs:
         with:
           repository: SeanEmcee/Nexaris
           ref: feature/nexaris-unified-app
-          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN }}
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: recursive
           path: source
@@ -80,7 +80,7 @@ jobs:
           done
 
   build:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.actor == 'SeanEmcee'
     needs: private-preflight
     runs-on: macos-26-intel
     timeout-minutes: 120
@@ -102,7 +102,7 @@ jobs:
         with:
           repository: SeanEmcee/Nexaris
           ref: feature/nexaris-unified-app
-          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN }}
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           submodules: recursive
           persist-credentials: false
           path: source
@@ -229,7 +229,7 @@ jobs:
         shell: bash
         working-directory: source
         env:
-          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN }}
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           files=()
