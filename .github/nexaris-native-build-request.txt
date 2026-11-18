@@ -1,0 +1,2 @@
+Nexaris private native ROM+RapKeys compile requested from public macOS runners.
+Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
