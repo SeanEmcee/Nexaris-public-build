@@ -1,4 +1,6 @@
 Nexaris private native ROM+RapKeys compile requested from public macOS runners.
 Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
 
-Build 3: resolve iOS DYLD @rpath/OpenSSL.framework/OpenSSL missing from embedded Nyxian framework. Private source commit 20db59ebb1071779b482730ae2dfc901ceec8306.
+Build request: native URL OS 6.4.4 library UI parity, user-requested keyboard previews across all five tabs, swipe-to-dismiss native sheets, Nyxian recovery TWRP XML resources, ROM onboarding improvements and keyboard/LiveProcess diagnostics.
+Private source branch: feature/nexaris-unified-app
+Private source commit: 84f1fda023423dd3bce016b44383a461eff74281
