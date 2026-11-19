@@ -5,3 +5,4 @@ Rerun after protected-draft Swift smoke test throwable assertion fix, and Meow p
 Rerun after dashboard source regression was migrated from legacy RapBoxProfilesSection() to explicit consumeLaunchActions:false.
 Final gate: repeat full portable suite on latest private branch and run newly added iPhoneOS SwiftUI typecheck on public macOS runner. No IPA/keys/source artifacts.
 Revalidate original Rap-box MT rotating globe splash and one circular Play/Stop Meow Toggle with iPhoneOS typecheck. No private artifacts.
+Rerun: both parse and iPhoneOS typecheck now include NexarisRapBoxSplashView.swift; validate latest circular Meow Toggle change.
