@@ -3,3 +3,5 @@ Private source: SeanEmcee/Nexaris feature/nexaris-unified-app
 Public builder: SeanEmcee/Nexaris-public-build
 Output: private draft release in SeanEmcee/Nexaris
 Expected: unsigned iPhoneOS test host, not an authorized VPN installation
+
+Retry: missing docs directory fix in private VPN test preparer.
