@@ -27,6 +27,13 @@ jobs:
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           path: source
+      - name: Verify native iOS build script syntax
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/build_nexaris_ios.sh
+          echo "PASS: native Nyxian / LiveProcess build script syntax."
       - name: Run full Python source tests and report failure names only
         working-directory: source
         shell: bash
