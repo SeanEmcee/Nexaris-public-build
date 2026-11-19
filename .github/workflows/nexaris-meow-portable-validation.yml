@@ -170,6 +170,7 @@ jobs:
               Nexaris/Sources/NexarisRapBoxOperationIntent.swift \
               Nexaris/Sources/NexarisVPN.swift \
               Nexaris/Sources/NexarisRapBoxDashboardView.swift \
+              Nexaris/Sources/NexarisRapBoxSplashView.swift \
               Nexaris/Sources/NexarisMeowProfileBuilder.swift \
               Nexaris/Sources/NexarisMeowDraftStore.swift \
               Nexaris/Sources/NexarisMeowProfileCreatorView.swift \
