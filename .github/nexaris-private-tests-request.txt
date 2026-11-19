@@ -7,3 +7,4 @@ Verify last ROM tab regression assertion.
 Capture one unnamed Python unittest setup/import exception.
 Retry: reveal unnamed unittest setup/import error in sanitized logs.
 Test updated shared Rap Keys Studio preview renderer guard.
+Retry: capture unclassified unittest import/setup error name.
