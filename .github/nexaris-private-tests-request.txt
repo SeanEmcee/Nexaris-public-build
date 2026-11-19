@@ -1,2 +1,3 @@
 Private source regression diagnostics, tests only. Do not start a macOS build. Check branch feature/nexaris-unified-app.
 Collect failure details privately before fixes.
+Verify signer fixtures and entitlement path patches.
