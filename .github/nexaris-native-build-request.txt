@@ -1,5 +1,5 @@
 Nexaris private native ROM+RapKeys compile requested from public macOS runners.
 Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
 
-Build: signed ROM native first-party dock with host callbacks, lazy on-demand URL OS/Rap Keys/Rap Box tabs, resumed guest UIWindow after sheet dismissal, centralized Settings theme, all ROM management in Settings, SwiftLlama, Nyxian recovery assets and linked-framework audits. Full real ROM and native apps require on-device verification.
-Private source: feature/nexaris-unified-app @ 5f6180fdf74aaa3c4cfed93c4348c171d7234fa2
+Native build: FULL original URL OS 6.4.4 source + retained WKWebView + WebKit default JIT + independently signed URL OS widget/JIT helper + original URL OS shortcuts + app deactivation without cached IPA + individual refresh without Files picker + broken idevice socket diagnostics + lazy startup.
+Source revision: 0a72fe9650de7baf4686033f7c9b5007c3fd11f5
