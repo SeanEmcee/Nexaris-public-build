@@ -74,6 +74,24 @@ jobs:
               # No repr(source) or tokens in the issue. Text is truncated before source dumps.
               detail_line = re.sub(r"(['\"]).{55,}", "[omitted]", detail_line)
               out.append(f"- **{head.group(1)}** `{head.group(3)}.{head.group(2)}` at `{loc}`: {detail} {detail_line[:130]}")
+          # Include setUpModule/setUpClass/import-time errors that are not
+          # named test_* functions; these still fail the suite.
+          ordinary = re.findall(r"^(?:FAIL|ERROR): ([^\n]+)$", data, re.M)
+          if ordinary:
+              out.append("")
+              out.append("### All failure/error headings")
+              for item in ordinary:
+                  out.append("- " + item[:180])
+          errors = re.findall(r"^([A-Za-z_]+(?:Error|Exception)): ([^\n]+)$", data, re.M)
+          if errors:
+              out.append("")
+              out.append("### Exception types (values truncated)")
+              for name, detail in errors[-12:]:
+                  if any(t in detail.lower() for t in ("token=", "password=", "bearer ")):
+                      detail = "[redacted]"
+                  else:
+                      detail = re.sub(r"(['\"]).{55,}", "[omitted]", detail)
+                  out.append("- " + name + ": " + detail[:150])
           pathlib.Path("build/rapbox-private-test-summary.md").write_text("\n".join(out) + "\n")
           PY
           if [[ -n "${GH_TOKEN:-}" ]]; then
