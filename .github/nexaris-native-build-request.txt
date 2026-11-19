@@ -1,5 +1,5 @@
 Nexaris private native ROM+RapKeys compile requested from public macOS runners.
 Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
 
-Build: required SwiftLlama 1.2.0 host runtime, static/dynamic llama packaging gate, five-tab unsaved real-time previews, UI fixes, recovery XML assets. Private source and outputs remain private.
-Private source: feature/nexaris-unified-app @ 6be894f6b000c6e79bc811c8802eb7b24e9e6675
+Build: signed ROM native first-party dock with host callbacks, lazy on-demand URL OS/Rap Keys/Rap Box tabs, resumed guest UIWindow after sheet dismissal, centralized Settings theme, all ROM management in Settings, SwiftLlama, Nyxian recovery assets and linked-framework audits. Full real ROM and native apps require on-device verification.
+Private source: feature/nexaris-unified-app @ 5f6180fdf74aaa3c4cfed93c4348c171d7234fa2
