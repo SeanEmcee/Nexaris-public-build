@@ -21,3 +21,5 @@ Recheck 719-test guest-first ROM launch contract after Fast Launch argument upda
 Test-only rerun: guest-first native ROM fast path after source-contract wrapping fix; no IPA compile.
 
 Test-only: verify last-seen ROM app cold launch remains unverified until actual Nyxian inventory and respects Fast Launch.
+
+Test-only: optional signed ROM guest-first ABI fallback and deferred home patches, no macOS build.
