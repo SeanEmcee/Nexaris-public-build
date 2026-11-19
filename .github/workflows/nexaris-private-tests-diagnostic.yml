@@ -53,9 +53,9 @@ jobs:
               print(entry)
           # Handle setUpClass/import errors that don't have a test_ method.
           for label in re.findall(r"^(?:FAIL|ERROR): ([^\\n]{1,180})$", data, re.M):
-              if label.startswith("test_"):
+              if re.match(r"^test_[a-z0-9_]+ \\(test_[a-z0-9_]+\\.", label):
                   continue
-              print("UNNAMED TEST ERROR: " + label[:150])
+              print("UNCLASSIFIED TEST ERROR: " + label[:150])
           # Never print tracebacks, assertions, secrets or private source into public logs.
           PY
           python3 - <<'PY'
