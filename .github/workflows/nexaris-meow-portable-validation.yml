@@ -48,6 +48,7 @@ jobs:
             Nexaris/Sources/NexarisMeowIntegrationView.swift \
             Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
             Nexaris/Sources/NexarisRapBoxDashboardView.swift \
+            Nexaris/Sources/NexarisRapBoxSplashView.swift \
             > /tmp/meow-swift-parse.log 2>&1; then
             echo "::error::Meow Swift syntax check failed. Source and compiler log withheld."
             exit 1
