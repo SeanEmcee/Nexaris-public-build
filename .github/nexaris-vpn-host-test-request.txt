@@ -1,0 +1,5 @@
+Nexaris VPN host test build request
+Private source: SeanEmcee/Nexaris feature/nexaris-unified-app
+Public builder: SeanEmcee/Nexaris-public-build
+Output: private draft release in SeanEmcee/Nexaris
+Expected: unsigned iPhoneOS test host, not an authorized VPN installation
