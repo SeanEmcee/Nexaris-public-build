@@ -4,3 +4,4 @@ Meow host remains separately signed; no claim of a working Network Extension or 
 Rerun after protected-draft Swift smoke test throwable assertion fix, and Meow profile/launch routing updates.
 Rerun after dashboard source regression was migrated from legacy RapBoxProfilesSection() to explicit consumeLaunchActions:false.
 Final gate: repeat full portable suite on latest private branch and run newly added iPhoneOS SwiftUI typecheck on public macOS runner. No IPA/keys/source artifacts.
+Revalidate original Rap-box MT rotating globe splash and one circular Play/Stop Meow Toggle with iPhoneOS typecheck. No private artifacts.
