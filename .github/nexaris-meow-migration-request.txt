@@ -1,0 +1,3 @@
+Validate private feature/rapbox-meow-migration using portable Swift and Python tests only.
+Do not upload private source, logs, credentials, IPA, or built artifacts.
+Meow host remains separately signed; no claim of a working Network Extension or true atomic racing.
