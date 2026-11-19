@@ -23,3 +23,5 @@ Test-only rerun: guest-first native ROM fast path after source-contract wrapping
 Test-only: verify last-seen ROM app cold launch remains unverified until actual Nyxian inventory and respects Fast Launch.
 
 Test-only: optional signed ROM guest-first ABI fallback and deferred home patches, no macOS build.
+
+Test-only: cold-start lazy Rap Box / Rap Keys / URL OS, shortcut routing, hosted Nyxian recovery scan; no Mac build.
