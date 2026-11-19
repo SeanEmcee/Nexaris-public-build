@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           test -n "${GH_TOKEN:-}" || { echo "::error::Missing private output credential"; exit 1; }
           mkdir -p /tmp/nexaris-private-diagnostics
-          gh release download nexaris-actions-44486113999 \
+          gh release download nexaris-actions-44505113213 \
             --repo SeanEmcee/Nexaris \
             --pattern 'Nexaris-native-diagnostics.json' \
             --pattern 'Nexaris-native-build.log' \
@@ -35,9 +35,9 @@ jobs:
           report = json.loads((folder / 'Nexaris-native-diagnostics.json').read_text())
           errors = [issue for issue in report.get('issues', []) if issue.get('severity') == 'error']
           out = [
-              '## Private native compiler diagnostics for public run 44486113999',
+              '## Private native compiler diagnostics for public run 44505113213',
               '',
-              'Source revision: 7599f10946a5e8202b07644f77931b6f7857f87a',
+              'Source revision: b7645854d02d029b29124192e3bc9f2ff4c734ab',
               'Exit: ' + str(report.get('build_exit_code')),
               'Errors: ' + str(report.get('errors_observed')),
               'Xcode succeeded: ' + str(report.get('xcode_compilation_succeeded')),
@@ -57,6 +57,15 @@ jobs:
               for line in matches[:15]:
                   line = re.sub(r'/Users/[^ ]+', '[private-path]', line)
                   out.append('- ' + line[:300])
+          raw = (folder / 'Nexaris-native-build.log').read_text(errors='replace').splitlines()
+          relevant = [line for line in raw if re.search(
+              r'(?i)(error:|failed|exit code|\\*\\* BUILD|cannot|not found|not permitted|operation not allowed|terminated)',
+              line) and len(line) < 1600]
+          out += ['', '### Additional build-failure lines (sanitized)']
+          for line in relevant[-35:]:
+              line = re.sub(r'/Users/[^ ]+', '[private-path]', line)
+              line = re.sub(r'(?i)(?:bearer +[^ ]+|(?:token|password|private_key)\\s*[:=]\\s*[^ ]+)', '[redacted]', line)
+              out.append('- ' + line[:400])
           out += ['', 'Full build log and binary artifacts remain PRIVATE.']
           Path('/tmp/nexaris-native-compiler-errors.md').write_text('\n'.join(out)+'\n')
           PY
