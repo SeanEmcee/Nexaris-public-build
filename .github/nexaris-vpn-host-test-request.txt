@@ -7,3 +7,5 @@ Expected: unsigned iPhoneOS test host, not an authorized VPN installation
 Retry: missing docs directory fix in private VPN test preparer.
 Retry: sanitized test exception diagnostics.
 Retry: corrected private App Group test fixture.
+
+Rerun authorized after private regression suite 704 tests passed in run 44459382472. Pin tested source SHA across Ubuntu and macOS jobs.
