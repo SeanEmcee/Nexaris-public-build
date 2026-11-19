@@ -8,3 +8,4 @@ Revalidate original Rap-box MT rotating globe splash and one circular Play/Stop 
 Rerun: both parse and iPhoneOS typecheck now include NexarisRapBoxSplashView.swift; validate latest circular Meow Toggle change.
 Final post-UI validation: exactly one Meow Toggle Shortcut and AppIntent, original spinning globe splash, private iPhoneOS SwiftUI typecheck; log source SHA.
 Validate latest all-tabs red/black Rap Box design and Nexaris-only URL OS WebApp / ROM App Shortcuts entity sync; run iPhoneOS typecheck. No IPA/signing, private source and logs withheld.
+Validate revised 10-second rotating globe and 1250 ms first-open splash, original progress bar, and separated URL OS WebApp/ROM App dynamic Shortcuts after UI changes.
