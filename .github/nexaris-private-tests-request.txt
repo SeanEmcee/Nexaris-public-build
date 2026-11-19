@@ -9,3 +9,5 @@ Retry: reveal unnamed unittest setup/import error in sanitized logs.
 Test updated shared Rap Keys Studio preview renderer guard.
 Retry: capture unclassified unittest import/setup error name.
 Audit 2026-11-18: verify explicit native Nyxian LiveProcess target, ROM hash gate, App Groups and source tests. No macOS compilation requested.
+
+2026-11-18: verify Nyxian native ROM guest launch, inventory, and switcher contracts (test-only; no macOS compilation).
