@@ -31,6 +31,12 @@ jobs:
           persist-credentials: false
           path: source
 
+      - name: Identify exact private source revision
+        working-directory: source
+        shell: bash
+        run: |
+          echo "VALIDATED_PRIVATE_SHA=$(git rev-parse HEAD)"
+
       - name: Parse Meow Swift sources and native build script
         working-directory: source
         shell: bash
@@ -129,6 +135,12 @@ jobs:
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           path: source
+      - name: Identify exact private source revision
+        working-directory: source
+        shell: bash
+        run: |
+          echo "VALIDATED_PRIVATE_SHA=$(git rev-parse HEAD)"
+
       - name: Typecheck Meow-powered Rap Box SwiftUI with iPhoneOS SDK
         shell: bash
         working-directory: source
