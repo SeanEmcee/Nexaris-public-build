@@ -76,8 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          python3 -m unittest discover -s scripts/tests -p 'test_*.py' \\
-            > build/Nexaris-regression-gate.log 2>&1 || {
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' > build/Nexaris-regression-gate.log 2>&1 || {
               echo "::error::Nexaris full private regression suite failed; macOS build blocked."
               exit 1
             }
