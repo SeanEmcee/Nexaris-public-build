@@ -13,3 +13,5 @@ Audit 2026-11-18: verify explicit native Nyxian LiveProcess target, ROM hash gat
 2026-11-18: verify Nyxian native ROM guest launch, inventory, and switcher contracts (test-only; no macOS compilation).
 
 Source-only regression gate: native ROM guest-first deferred Home, Fast Launch toggle, cold retry and app scene cover; do not perform macOS build.
+
+Test-only: check guest-first ROM home deferral, scene cover, and fallback; do not start macOS compilation.
