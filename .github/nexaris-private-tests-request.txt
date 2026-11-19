@@ -31,3 +31,5 @@ Test-only rerun: shortened hosted ROM second-scan, lazy built-in apps, and updat
 Test-only after removing duplicated signed-slot test fixture and deferring guest-first dock. No native/macOS build.
 
 Test-only final check: fixed pinned signed-ROM BootViewController fixture and guest-first fallback.
+
+2026-11-18: Reproduce failures in public build #44476003763 against private unified source; report ONLY failed Python test names and sanitized error summaries. Do not build IPA or publish private logs.
