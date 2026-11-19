@@ -11,3 +11,4 @@ Validate latest all-tabs red/black Rap Box design and Nexaris-only URL OS WebApp
 Validate revised 10-second rotating globe and 1250 ms first-open splash, original progress bar, and separated URL OS WebApp/ROM App dynamic Shortcuts after UI changes.
 Rerun after App Intent rename source-contract fix for Open Rap Box VPN; verify latest globe splash and URL OS/ROM Shortcuts regression checks.
 Final prebuild audit: corrected 10-second splash contract against exact private branch SHA. Run portable and iPhoneOS typechecks; do not expose private source.
+Validate default Chute/optional Meow host switch, Chute direct URL, Cloudflare WireGuard, Tailscale profile, original globe and iPhoneOS typecheck; keep all private assets private.
