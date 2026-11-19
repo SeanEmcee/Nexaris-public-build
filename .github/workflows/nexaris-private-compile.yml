@@ -121,7 +121,8 @@ jobs:
       # Strict source-test validation; do not suppress failures during release builds.
       NEXARIS_FIRST_COMPILE: "0"
       NEXARIS_BUILD_MODE: "full"
-      NEXARIS_KEYBOARD_COMPILE_FIRST: "0"
+      # Fail fast on Rap Keys native iPhoneOS compiler errors before the full Nyxian build.
+      NEXARIS_KEYBOARD_COMPILE_FIRST: "1"
       NEXARIS_CACHE_PRIME_ONLY: "0"
       # ROM integrity test is explicit. The actual native Nyxian LiveProcess
       # extension is provided by the Nyxian target, not the alternate LC path.
@@ -139,10 +140,10 @@ jobs:
           test "${NEXARIS_ENABLE_GUEST_PROBE}" = 0
           test "${NEXARIS_FIRST_COMPILE}" = 0
           test "${NEXARIS_BUILD_MODE}" = full
-          test "${NEXARIS_KEYBOARD_COMPILE_FIRST}" = 0
+          test "${NEXARIS_KEYBOARD_COMPILE_FIRST}" = 1
           test "${NEXARIS_CACHE_PRIME_ONLY}" = 0
           test "${NEXARIS_ROM_HASH_SELFTEST}" = 1
-          echo "Full native Nyxian build selected (Nyxian supplies its own LiveProcess.appex)."
+          echo "Full native Nyxian build selected with Rap Keys compile-first (Nyxian supplies its own LiveProcess.appex)."
       - name: Checkout original private Nexaris without publishing it
         id: private_checkout
         uses: actions/checkout@v4
