@@ -125,6 +125,7 @@ jobs:
           check "compile Chute Cloudflare WireGuard importer" swiftc \
             Nexaris/Sources/NexarisChuteProfileBuilder.swift \
             Nexaris/Sources/NexarisChuteWARPImporter.swift \
+            Nexaris/Sources/NexarisChuteAPIInspector.swift \
             scripts/tests/NexarisChuteWARPImportSmoke.swift \
             -o /tmp/nexaris-meow-contracts/chute-wireguard
           check "test Chute Cloudflare WireGuard importer" /tmp/nexaris-meow-contracts/chute-wireguard
