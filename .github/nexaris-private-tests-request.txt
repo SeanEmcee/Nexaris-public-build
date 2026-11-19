@@ -41,3 +41,5 @@ Test-only final check: fixed pinned signed-ROM BootViewController fixture and gu
 2026-11-19: Source-only regression after native Nyxian optional LDEApplicationWorkspace.allApplicationObjects() Swift compile fix from failed full build #44482265582; verify both inventory paths use [] fallback, no macOS compile.
 
 2026-11-19: Regression check for failed Nyxian native link build 44486113999: remove direct NXWindowServer and NXWindowSessionApplication Swift host references (symbols belong to signed SuperSlot); replace with Objective-C runtime lookup and session checks; keep guest fallback. Test-only, do not start macOS build.
+
+2026-11-19: Source-regression check after build 44492041473: fix My Apps SwiftUI #if branch modifier placement (View.font compile error), fix Rap Keys Effects/Designs Revert Button callbacks by explicit () -> Void closures (Xcode 26.6). Includes three dedicated new source tests. Do not launch macOS compiler in this diagnostic.
