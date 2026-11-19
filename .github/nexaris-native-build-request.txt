@@ -6,3 +6,5 @@ Current keyboard fix commit: 1378f9c918f62f35cb18685767496e49065e28d6.
 Current keyboard regression test: 0ae890acc9e12129dc0fa70ac425709f33e1156e.
 No private sources, credentials, build logs or compiled IPAs may be stored in public artifacts.
 Requested full build configuration commit: 7730c10941e5b132b5b766d54b268a313278f90b
+
+2026-11-18: Full native Nyxian ROM guest-first launch build after passing 728-test private source gate; signed-ROM fallback preserved. User-approved full rebuild.
