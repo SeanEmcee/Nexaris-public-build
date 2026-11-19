@@ -9,3 +9,4 @@ Rerun: both parse and iPhoneOS typecheck now include NexarisRapBoxSplashView.swi
 Final post-UI validation: exactly one Meow Toggle Shortcut and AppIntent, original spinning globe splash, private iPhoneOS SwiftUI typecheck; log source SHA.
 Validate latest all-tabs red/black Rap Box design and Nexaris-only URL OS WebApp / ROM App Shortcuts entity sync; run iPhoneOS typecheck. No IPA/signing, private source and logs withheld.
 Validate revised 10-second rotating globe and 1250 ms first-open splash, original progress bar, and separated URL OS WebApp/ROM App dynamic Shortcuts after UI changes.
+Rerun after App Intent rename source-contract fix for Open Rap Box VPN; verify latest globe splash and URL OS/ROM Shortcuts regression checks.
