@@ -11,3 +11,5 @@ Retry: capture unclassified unittest import/setup error name.
 Audit 2026-11-18: verify explicit native Nyxian LiveProcess target, ROM hash gate, App Groups and source tests. No macOS compilation requested.
 
 2026-11-18: verify Nyxian native ROM guest launch, inventory, and switcher contracts (test-only; no macOS compilation).
+
+Source-only regression gate: native ROM guest-first deferred Home, Fast Launch toggle, cold retry and app scene cover; do not perform macOS build.
