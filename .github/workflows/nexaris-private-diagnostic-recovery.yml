@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           test -n "${GH_TOKEN:-}" || { echo "::error::Missing private output credential"; exit 1; }
           mkdir -p /tmp/nexaris-private-diagnostics
-          gh release download nexaris-actions-44476326661 \
+          gh release download nexaris-actions-44482265582 \
             --repo SeanEmcee/Nexaris \
             --pattern 'Nexaris-native-diagnostics.json' \
             --pattern 'Nexaris-native-build.log' \
@@ -35,9 +35,9 @@ jobs:
           report = json.loads((folder / 'Nexaris-native-diagnostics.json').read_text())
           errors = [issue for issue in report.get('issues', []) if issue.get('severity') == 'error']
           out = [
-              '## Private native compiler diagnostics for public run 44476326661',
+              '## Private native compiler diagnostics for public run 44482265582',
               '',
-              'Source revision: b43946f4073f1a91703692725eadc749a94e51e3',
+              'Source revision: 3a75a507e38fa6e050febdfe00abc5ed1ba93df0',
               'Exit: ' + str(report.get('build_exit_code')),
               'Errors: ' + str(report.get('errors_observed')),
               'Xcode succeeded: ' + str(report.get('xcode_compilation_succeeded')),
