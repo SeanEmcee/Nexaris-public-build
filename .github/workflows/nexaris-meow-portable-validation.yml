@@ -55,6 +55,11 @@ jobs:
             Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
             Nexaris/Sources/NexarisRapBoxDashboardView.swift \
             Nexaris/Sources/NexarisRapBoxSplashView.swift \
+            Nexaris/Sources/NexarisHomeScreen.swift \
+            Nexaris/Sources/NexarisGuestRuntime.swift \
+            Nexaris/Sources/NexarisShortcutSceneRouter.swift \
+            Nexaris/Sources/EmbeddedURLOS644/App/URLOSAppIntents.swift \
+            Nexaris/Sources/EmbeddedURLOS644/App/BerylliumSiteStore.swift \
             > /tmp/meow-swift-parse.log 2>&1; then
             echo "::error::Meow Swift syntax check failed. Source and compiler log withheld."
             exit 1
@@ -120,6 +125,12 @@ jobs:
             exit 1
           fi
           echo "PASS: Rap Box dashboard source regressions"
+          if ! python3 -m unittest discover -s scripts/tests \
+            -p 'test_nexaris_shortcuts_entity_sync.py' > /tmp/meow-shortcuts-sync.log 2>&1; then
+            echo "::error::Nexaris URL OS/ROM dynamic Shortcuts regression check failed"
+            exit 1
+          fi
+          echo "PASS: Nexaris URL OS WebApp and installed ROM App dynamic Shortcuts contracts"
 
   ios-typecheck:
     name: iPhoneOS SwiftUI typecheck (private source)
