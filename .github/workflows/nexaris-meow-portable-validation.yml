@@ -113,3 +113,77 @@ jobs:
             exit 1
           fi
           echo "PASS: Rap Box dashboard source regressions"
+
+  ios-typecheck:
+    name: iPhoneOS SwiftUI typecheck (private source)
+    needs: portable
+    if: github.actor == 'SeanEmcee'
+    runs-on: macos-26-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/rapbox-meow-migration
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          path: source
+      - name: Typecheck Meow-powered Rap Box SwiftUI with iPhoneOS SDK
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+          mkdir -p /tmp/nexaris-meow-ios
+          cat > /tmp/nexaris-meow-ios/PanelStub.swift <<'SWIFT'
+          import Foundation
+          import SwiftUI
+          import AppIntents
+          enum NexarisBuiltInTool { case rapBox }
+          @MainActor final class NexarisDirectLaunchCoordinator {
+              static let shared = NexarisDirectLaunchCoordinator()
+              func openBuiltIn(_ tool: NexarisBuiltInTool) {}
+          }
+          extension View {
+              func nexarisChrome() -> some View { self }
+          }
+          struct NexarisPanel<Content: View>: View {
+              let title: String
+              let content: Content
+              init(_ title: String, @ViewBuilder content: () -> Content) {
+                  self.title = title
+                  self.content = content()
+              }
+              var body: some View { ScrollView { content } }
+          }
+          SWIFT
+          if ! xcrun swiftc -typecheck -parse-as-library -swift-version 5 \
+              -module-name NexarisMeowRapBoxTypecheck \
+              -sdk "$sdk" -target arm64-apple-ios17.4 \
+              /tmp/nexaris-meow-ios/PanelStub.swift \
+              Nexaris/Sources/NexarisSingBoxAPI.swift \
+              Nexaris/Sources/NexarisRapBoxMTController.swift \
+              Nexaris/Sources/NexarisRapBoxProfiles.swift \
+              Nexaris/Sources/NexarisRapBoxProfileUI.swift \
+              Nexaris/Sources/NexarisRapBoxLaunch.swift \
+              Nexaris/Sources/NexarisRapBoxOperationIntent.swift \
+              Nexaris/Sources/NexarisVPN.swift \
+              Nexaris/Sources/NexarisRapBoxDashboardView.swift \
+              Nexaris/Sources/NexarisMeowProfileBuilder.swift \
+              Nexaris/Sources/NexarisMeowDraftStore.swift \
+              Nexaris/Sources/NexarisMeowProfileCreatorView.swift \
+              Nexaris/Sources/NexarisMeowWireGuardImporter.swift \
+              Nexaris/Sources/NexarisMeowDeepLink.swift \
+              Nexaris/Sources/NexarisMeowIntegrationView.swift \
+              Nexaris/Sources/NexarisMeowVPNShortcutBridge.swift \
+              Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
+              Nexaris/Sources/NexarisCloudflareWireGuardEnrollment.swift \
+              Nexaris/Sources/NexarisCloudflareRegistrationParser.swift \
+              > /tmp/nexaris-meow-ios/typecheck.log 2>&1; then
+            grep -E '\.swift:[0-9]+:[0-9]+: error:' /tmp/nexaris-meow-ios/typecheck.log \
+              | sed -E 's@^.*/([^/]+\.swift):([0-9]+):([0-9]+): error:.*$@\1:\2:\3: private compiler error@' \
+              | head -n 15 || true
+            echo "::error::Private Meow iPhoneOS typecheck failed; source and full diagnostics withheld."
+            exit 1
+          fi
+          echo "PASS: Meow Rap Box SwiftUI typecheck with iPhoneOS SDK"
