@@ -67,6 +67,18 @@ jobs:
             exit 1
           }
           echo "PASS: source rebranding, entitlement declaration and isolation checks."
+      - name: Gate macOS build on complete private Nexaris source regressions
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' \
+            > build/nexaris-full-source-tests.log 2>&1 || {
+              echo "::error::Private Nexaris source regressions failed; macOS build blocked. Inspect the dedicated private diagnostic report."
+              exit 1
+            }
+          echo "PASS: complete Nexaris source-regression suite."
       - name: Checkout pinned public Meow version
         shell: bash
         run: |
