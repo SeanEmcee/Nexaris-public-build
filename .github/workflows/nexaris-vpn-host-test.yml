@@ -1,0 +1,194 @@
+name: Nexaris VPN test host - private source on public runners
+
+# Workflow lives in PUBLIC runner repo; code and unsigned IPA stay PRIVATE.
+# Manually triggered to avoid wasting macOS build minutes or exposing source.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexaris-native-vpn-host-test
+  cancel-in-progress: false
+
+jobs:
+  private-preflight:
+    if: github.actor == 'SeanEmcee'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Require private checkout/output tokens
+        shell: bash
+        env:
+          SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${SOURCE_TOKEN:-}" || { echo "::error::Private Nexaris source token unavailable"; exit 2; }
+          test -n "${OUTPUT_TOKEN:-}" || { echo "::error::Private Nexaris output token unavailable"; exit 2; }
+          echo "Required private access is configured; values remain hidden."
+      - name: Checkout private Nexaris branch
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/nexaris-unified-app
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          path: source
+      - name: Run offline branding and entitlement-contract tests
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python3 -m unittest discover -s scripts/tests -p 'test_rapbox_native_vpn.py' > build/rapbox-host-tests.log 2>&1 || {
+            echo "::error::Private VPN host source test failed. See private repo; no logs published here."
+            exit 1
+          }
+          echo "PASS: source rebranding, entitlement declaration and isolation checks."
+      - name: Checkout pinned public Meow version
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/meow-rs/meow-ios.git upstream
+          git -C upstream checkout --detach 30370b77d4fcea265cfbd8e4a176cfed24e5eea1 >/dev/null
+      - name: Prepare and audit standalone Nexaris test host source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 source/scripts/prepare_rapbox_native_vpn.py \
+            --source upstream \
+            --output /tmp/NexarisVPNTest > /tmp/nexaris-vpn-preflight.log 2>&1 || {
+              echo "::error::Source preparation failed; private snapshot not published."
+              exit 1
+            }
+          grep -q 'packet-tunnel-provider' /tmp/NexarisVPNTest/PacketTunnel/PacketTunnel.entitlements
+          test -f /tmp/NexarisVPNTest/docs/rapbox-direct-dns-test.yaml
+          echo "PASS: self-contained Nexaris-branded VPN host prepared."
+
+  compile-unsigned:
+    if: github.actor == 'SeanEmcee'
+    needs: private-preflight
+    runs-on: macos-26-intel
+    timeout-minutes: 120
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+    steps:
+      - name: Checkout private Nexaris scripts only on this runner
+        id: private_checkout
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/nexaris-unified-app
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          path: source
+      - name: Select Xcode 26.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.6.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          test "$(xcodebuild -version | head -1)" = "Xcode 26.6"
+      - name: Prepare public pinned Meow sources without copying signing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/build
+          git clone --filter=blob:none --no-checkout https://github.com/meow-rs/meow-ios.git upstream \
+            > source/build/vpn-preparation.log 2>&1
+          git -C upstream checkout --detach 30370b77d4fcea265cfbd8e4a176cfed24e5eea1 \
+            >> source/build/vpn-preparation.log 2>&1
+          python3 source/scripts/prepare_rapbox_native_vpn.py \
+            --source upstream --output ./NexarisVPNTest \
+            >> source/build/vpn-preparation.log 2>&1
+          echo "Nexaris-branded VPN test app and extension source prepared."
+      - name: Install open-source build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v xcodegen >/dev/null || brew install xcodegen
+          command -v cmake >/dev/null || brew install cmake
+          command -v rustup >/dev/null || {
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --location https://sh.rustup.rs -o /tmp/rapbox-rustup.sh
+            sh /tmp/rapbox-rustup.sh -y --profile minimal --no-modify-path
+          }
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim \
+            aarch64-apple-tvos aarch64-apple-tvos-sim
+      - name: Compile Meow Rust FFI into standalone static XCFramework
+        shell: bash
+        working-directory: NexarisVPNTest
+        run: |
+          set -euo pipefail
+          mkdir -p ../source/build
+          export PATH="$HOME/.cargo/bin:$PATH"
+          ./scripts/build-rust.sh > ../source/build/vpn-rust-build.log 2>&1 || {
+            echo "::error::VPN Rust engine compile failed; diagnostic stays in private repository."
+            exit 1
+          }
+          test -d MeowCore/Frameworks/MeowCore.xcframework
+          echo "Rust engine compiled for all four Apple targets."
+      - name: Generate and compile unsigned iPhoneOS test host
+        shell: bash
+        working-directory: NexarisVPNTest
+        run: |
+          set -euo pipefail
+          ./scripts/generate-xcodeproj.sh > ../source/build/vpn-xcodegen.log 2>&1 || {
+            echo "::error::Nexaris VPN test Xcode project generation failed."
+            exit 1
+          }
+          xcodebuild build -project meow-ios.xcodeproj -scheme meow-ios \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ../source/build/VPNDerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            > ../source/build/vpn-xcode-build.log 2>&1 || {
+              echo "::error::Unsigned VPN host compilation failed; full log stays private."
+              exit 1
+            }
+          app=../source/build/VPNDerivedData/Build/Products/Release-iphoneos/meow-ios.app
+          test -d "$app/PlugIns/PacketTunnel.appex" || {
+            echo "::error::Packet Tunnel app extension not packaged."
+            exit 1
+          }
+          mkdir -p ../source/build/NexarisVPNPayload/Payload
+          ditto "$app" ../source/build/NexarisVPNPayload/Payload/NexarisVPNTest.app
+          ( cd ../source/build/NexarisVPNPayload &&
+            ditto -c -k --sequesterRsrc --keepParent Payload \
+              ../Nexaris-VPN-Test-UNSIGNED.ipa )
+          ( cd ../source/build &&
+            shasum -a 256 Nexaris-VPN-Test-UNSIGNED.ipa > Nexaris-VPN-Test-UNSIGNED.ipa.sha256 )
+          echo "Unsigned Nexaris VPN test host compiled, NOT installed or provisioned."
+
+      - name: Deliver private diagnostics and unsigned test package
+        if: always() && steps.private_checkout.outcome == 'success'
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          files=()
+          for f in \
+            build/vpn-preparation.log \
+            build/vpn-rust-build.log \
+            build/vpn-xcodegen.log \
+            build/vpn-xcode-build.log \
+            build/Nexaris-VPN-Test-UNSIGNED.ipa \
+            build/Nexaris-VPN-Test-UNSIGNED.ipa.sha256; do
+            if [[ -s "$f" ]]; then files+=("$f"); fi
+          done
+          if (( ${#files[@]} == 0 )); then
+            echo "No logs or package available for private delivery."
+            exit 0
+          fi
+          tag="nexaris-vpn-test-$GITHUB_RUN_ID"
+          source_sha="$(git rev-parse HEAD)"
+          gh release create "$tag" "${files[@]}" \
+            --repo SeanEmcee/Nexaris --target "$source_sha" \
+            --title "Nexaris VPN private test $GITHUB_RUN_ID" --draft \
+            --notes "Unsigned, separately branded VPN host proof-of-concept. No Network Extension provisioning, on-device tunnel, or atomic racing is verified."
+          echo "VPN host build results delivered only into PRIVATE Nexaris draft release."
