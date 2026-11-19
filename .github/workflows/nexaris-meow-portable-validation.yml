@@ -1,4 +1,4 @@
-name: Nexaris Meow migration - private portable validation
+name: Nexaris Chute + Meow VPN hosts - private validation
 
 # The workflow is public; source, keys, logs and generated binaries stay private.
 # This test does not build or sign an IPA, or claim the VPN is connected.
@@ -37,7 +37,7 @@ jobs:
         run: |
           echo "VALIDATED_PRIVATE_SHA=$(git rev-parse HEAD)"
 
-      - name: Parse Meow Swift sources and native build script
+      - name: Parse both Chute and Meow Swift sources and native build script
         working-directory: source
         shell: bash
         run: |
@@ -52,6 +52,11 @@ jobs:
             Nexaris/Sources/NexarisMeowVPNShortcutBridge.swift \
             Nexaris/Sources/NexarisMeowProfileCreatorView.swift \
             Nexaris/Sources/NexarisMeowIntegrationView.swift \
+            Nexaris/Sources/NexarisRapBoxVPNHost.swift \
+            Nexaris/Sources/NexarisChuteProfileBuilder.swift \
+            Nexaris/Sources/NexarisChuteWARPImporter.swift \
+            Nexaris/Sources/NexarisChuteAPIInspector.swift \
+            Nexaris/Sources/NexarisChuteProfileCreatorView.swift \
             Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
             Nexaris/Sources/NexarisRapBoxDashboardView.swift \
             Nexaris/Sources/NexarisRapBoxSplashView.swift \
@@ -66,7 +71,7 @@ jobs:
           fi
           echo "PASS: portable Swift syntax and shell entrypoint"
 
-      - name: Compile and execute Meow routing, WireGuard and Shortcut contracts
+      - name: Compile and execute both VPN host routing and import contracts
         working-directory: source
         shell: bash
         run: |
@@ -107,6 +112,22 @@ jobs:
             scripts/tests/NexarisMeowDeepLinkSmoke.swift \
             -o /tmp/nexaris-meow-contracts/deeplinks
           check "test Meow deep links" /tmp/nexaris-meow-contracts/deeplinks
+          check "compile Chute/Meow host selector" swiftc \
+            Nexaris/Sources/NexarisRapBoxVPNHost.swift \
+            scripts/tests/NexarisRapBoxVPNHostSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/hosts
+          check "test Chute/Meow host selector" /tmp/nexaris-meow-contracts/hosts
+          check "compile Chute profile composer" swiftc \
+            Nexaris/Sources/NexarisChuteProfileBuilder.swift \
+            scripts/tests/NexarisChuteProfileSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/chute-profile
+          check "test Chute profile composer" /tmp/nexaris-meow-contracts/chute-profile
+          check "compile Chute Cloudflare WireGuard importer" swiftc \
+            Nexaris/Sources/NexarisChuteProfileBuilder.swift \
+            Nexaris/Sources/NexarisChuteWARPImporter.swift \
+            scripts/tests/NexarisChuteWARPImportSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/chute-wireguard
+          check "test Chute Cloudflare WireGuard importer" /tmp/nexaris-meow-contracts/chute-wireguard
 
       - name: Run Rap Box source contracts and dashboard regressions
         working-directory: source
@@ -152,7 +173,7 @@ jobs:
         run: |
           echo "VALIDATED_PRIVATE_SHA=$(git rev-parse HEAD)"
 
-      - name: Typecheck Meow-powered Rap Box SwiftUI with iPhoneOS SDK
+      - name: Typecheck Chute and Meow Rap Box SwiftUI with iPhoneOS SDK
         shell: bash
         working-directory: source
         run: |
@@ -201,6 +222,11 @@ jobs:
               Nexaris/Sources/NexarisMeowDeepLink.swift \
               Nexaris/Sources/NexarisMeowIntegrationView.swift \
               Nexaris/Sources/NexarisMeowVPNShortcutBridge.swift \
+              Nexaris/Sources/NexarisRapBoxVPNHost.swift \
+              Nexaris/Sources/NexarisChuteProfileBuilder.swift \
+              Nexaris/Sources/NexarisChuteWARPImporter.swift \
+              Nexaris/Sources/NexarisChuteAPIInspector.swift \
+              Nexaris/Sources/NexarisChuteProfileCreatorView.swift \
               Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
               Nexaris/Sources/NexarisCloudflareWireGuardEnrollment.swift \
               Nexaris/Sources/NexarisCloudflareRegistrationParser.swift \
