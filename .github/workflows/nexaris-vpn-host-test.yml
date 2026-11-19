@@ -51,7 +51,19 @@ jobs:
           set -euo pipefail
           mkdir -p build
           python3 -m unittest discover -s scripts/tests -p 'test_rapbox_native_vpn.py' > build/rapbox-host-tests.log 2>&1 || {
-            echo "::error::Private VPN host source test failed. See private repo; no logs published here."
+            # Only the exception CATEGORY and a limited, sanitized diagnostic
+            # are public; never upload test logs or private source excerpts.
+            python3 - <<'PY'
+          from pathlib import Path
+          import re
+          log = Path("build/rapbox-host-tests.log").read_text(errors="replace")
+          safe = re.compile(r"^(?:AssertionError|ValueError|FileNotFoundError|TypeError|AttributeError|ImportError|SyntaxError|KeyError|RuntimeError):")
+          for line in log.splitlines():
+              if safe.match(line):
+                  line = re.sub(r"/(?:Users|home|private|tmp)/[^ :]+", "<local-path>", line)
+                  print("Private test exception (sanitized): " + line[:180])
+          PY
+            echo "::error::Private VPN host source test failed. No private source or full logs published."
             exit 1
           }
           echo "PASS: source rebranding, entitlement declaration and isolation checks."
