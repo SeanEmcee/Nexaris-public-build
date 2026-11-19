@@ -43,3 +43,5 @@ Test-only final check: fixed pinned signed-ROM BootViewController fixture and gu
 2026-11-19: Regression check for failed Nyxian native link build 44486113999: remove direct NXWindowServer and NXWindowSessionApplication Swift host references (symbols belong to signed SuperSlot); replace with Objective-C runtime lookup and session checks; keep guest fallback. Test-only, do not start macOS build.
 
 2026-11-19: Source-regression check after build 44492041473: fix My Apps SwiftUI #if branch modifier placement (View.font compile error), fix Rap Keys Effects/Designs Revert Button callbacks by explicit () -> Void closures (Xcode 26.6). Includes three dedicated new source tests. Do not launch macOS compiler in this diagnostic.
+
+2026-11-19: Preflight full private source suite after Xcode appintentsmetadataprocessor failure run #44498004132. Exactly one containing-app AppShortcutsProvider (NexarisAppShortcuts); URL OS website action merged into that provider; embedded URL OS refresh shim targets unified provider. New regression test tests provider count/website action/refresh. Check before triggering native Xcode build.
