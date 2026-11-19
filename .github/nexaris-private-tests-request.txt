@@ -27,3 +27,5 @@ Test-only: optional signed ROM guest-first ABI fallback and deferred home patche
 Test-only: cold-start lazy Rap Box / Rap Keys / URL OS, shortcut routing, hosted Nyxian recovery scan; no Mac build.
 
 Test-only rerun: shortened hosted ROM second-scan, lazy built-in apps, and updated signed-slot ABI fixture; no macOS build.
+
+Test-only after removing duplicated signed-slot test fixture and deferring guest-first dock. No native/macOS build.
