@@ -3,3 +3,4 @@ Collect failure details privately before fixes.
 Verify signer fixtures and entitlement path patches.
 Verify consolidated Nexaris regression fixes before macOS build.
 Final validation: visible ROMs tab label vs ROM enum.
+Verify last ROM tab regression assertion.
