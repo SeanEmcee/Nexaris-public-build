@@ -5,3 +5,4 @@ Verify consolidated Nexaris regression fixes before macOS build.
 Final validation: visible ROMs tab label vs ROM enum.
 Verify last ROM tab regression assertion.
 Capture one unnamed Python unittest setup/import exception.
+Retry: reveal unnamed unittest setup/import error in sanitized logs.
