@@ -1,0 +1,54 @@
+name: Nexaris private source regression diagnostics (tests only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/nexaris-private-tests-request.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  private-tests:
+    if: >-
+      github.actor == 'SeanEmcee' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' &&
+        github.event.head_commit.message == 'ci: diagnose Nexaris private tests'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout private Nexaris without persisting credentials
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/nexaris-unified-app
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          path: source
+      - name: Run full Python source tests and report failure names only
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          set +e
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v > build/nexaris-private-tests.log 2>&1
+          test_exit=$?
+          set -e
+          TEST_EXIT="$test_exit" python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+          data = Path("build/nexaris-private-tests.log").read_text(encoding="utf-8", errors="replace")
+          failures = re.findall(r"^(?:FAIL|ERROR): (test_[a-z0-9_]+) \((test_[a-z0-9_]+)\.", data, re.M)
+          print("PRIVATE TEST RESULT: " + ("PASS" if not int(os.environ["TEST_EXIT"]) else "FAIL"))
+          print("Distinct failures/errors: " + str(len(failures)))
+          for test, module in failures:
+              print(f"FAILED TEST {module}.{test}")
+          totals = re.findall(r"^(?:Ran \d+ tests.*|FAILED \(.*\)|OK(?: \(.*\))?)$", data, re.M)
+          for entry in totals[-2:]:
+              print(entry)
+          # Never print tracebacks, assertions, secrets or private source into public logs.
+          PY
+          exit "$test_exit"
