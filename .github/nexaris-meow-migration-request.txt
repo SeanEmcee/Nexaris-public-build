@@ -2,3 +2,4 @@ Validate private feature/rapbox-meow-migration using portable Swift and Python t
 Do not upload private source, logs, credentials, IPA, or built artifacts.
 Meow host remains separately signed; no claim of a working Network Extension or true atomic racing.
 Rerun after protected-draft Swift smoke test throwable assertion fix, and Meow profile/launch routing updates.
+Rerun after dashboard source regression was migrated from legacy RapBoxProfilesSection() to explicit consumeLaunchActions:false.
