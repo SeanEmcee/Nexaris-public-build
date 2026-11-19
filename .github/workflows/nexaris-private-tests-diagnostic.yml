@@ -30,6 +30,8 @@ jobs:
       - name: Run full Python source tests and report failure names only
         working-directory: source
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p build
@@ -51,4 +53,30 @@ jobs:
               print(entry)
           # Never print tracebacks, assertions, secrets or private source into public logs.
           PY
+          python3 - <<'PY'
+          import pathlib, re
+          data = pathlib.Path("build/nexaris-private-tests.log").read_text(errors="replace")
+          out = ["## Test-only regression result", "",
+                 "Run: https://github.com/SeanEmcee/Nexaris-public-build/actions/runs/" +
+                 __import__("os").environ["GITHUB_RUN_ID"], "",
+                 "Exception summaries only; full source and logs remain off the public repository.", ""]
+          blocks = re.split(r"\n={30,}\n(?=(?:FAIL|ERROR): )", data)
+          for block in blocks:
+              head = re.search(r"^(FAIL|ERROR): (test_[A-Za-z0-9_]+) \((test_[A-Za-z0-9_]+)\.", block, re.M)
+              if not head:
+                  continue
+              lines = block.splitlines()
+              locs = re.findall(r'File "[^"]+/([^/]+)", line (\d+)', block)
+              loc = f"{locs[-1][0]}:{locs[-1][1]}" if locs else "unknown"
+              exc = re.search(r"^([A-Za-z_]+(?:Error|Exception)):\s*(.{0,250})$", block, re.M)
+              detail = (exc.group(1) if exc else "Exception")
+              detail_line = (exc.group(2) if exc else "")
+              # No repr(source) or tokens in the issue. Text is truncated before source dumps.
+              detail_line = re.sub(r"(['\"]).{55,}", "[omitted]", detail_line)
+              out.append(f"- **{head.group(1)}** `{head.group(3)}.{head.group(2)}` at `{loc}`: {detail} {detail_line[:130]}")
+          pathlib.Path("build/rapbox-private-test-summary.md").write_text("\n".join(out) + "\n")
+          PY
+          if [[ -n "${GH_TOKEN:-}" ]]; then
+            gh issue comment 35 --repo SeanEmcee/Nexaris --body-file build/rapbox-private-test-summary.md >/dev/null || echo "::warning::Could not post PRIVATE summary."
+          fi
           exit "$test_exit"
