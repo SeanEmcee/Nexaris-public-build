@@ -58,6 +58,7 @@ jobs:
             Nexaris/Sources/NexarisChuteAPIInspector.swift \
             Nexaris/Sources/NexarisChuteProfileCreatorView.swift \
             Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
+            Nexaris/Sources/NexarisCloudflareRacingIdentities.swift \
             Nexaris/Sources/NexarisRapBoxDashboardView.swift \
             Nexaris/Sources/NexarisRapBoxSplashView.swift \
             Nexaris/Sources/NexarisHomeScreen.swift \
@@ -129,6 +130,12 @@ jobs:
             scripts/tests/NexarisChuteWARPImportSmoke.swift \
             -o /tmp/nexaris-meow-contracts/chute-wireguard
           check "test Chute Cloudflare WireGuard importer" /tmp/nexaris-meow-contracts/chute-wireguard
+          check "compile distinct Cloudflare registrations" swiftc \
+            Nexaris/Sources/NexarisChuteProfileBuilder.swift \
+            Nexaris/Sources/NexarisCloudflareRacingIdentities.swift \
+            scripts/tests/NexarisCloudflareRacingIdentitiesSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/distinct-registrations
+          check "test distinct Cloudflare registrations" /tmp/nexaris-meow-contracts/distinct-registrations
 
       - name: Run Rap Box source contracts and dashboard regressions
         working-directory: source
@@ -229,6 +236,7 @@ jobs:
               Nexaris/Sources/NexarisChuteAPIInspector.swift \
               Nexaris/Sources/NexarisChuteProfileCreatorView.swift \
               Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
+              Nexaris/Sources/NexarisCloudflareRacingIdentities.swift \
               Nexaris/Sources/NexarisCloudflareWireGuardEnrollment.swift \
               Nexaris/Sources/NexarisCloudflareRegistrationParser.swift \
               > /tmp/nexaris-meow-ios/typecheck.log 2>&1; then
