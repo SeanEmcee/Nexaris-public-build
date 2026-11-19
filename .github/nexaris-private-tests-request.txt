@@ -17,3 +17,5 @@ Source-only regression gate: native ROM guest-first deferred Home, Fast Launch t
 Test-only: check guest-first ROM home deferral, scene cover, and fallback; do not start macOS compilation.
 
 Recheck 719-test guest-first ROM launch contract after Fast Launch argument update (test-only).
+
+Test-only rerun: guest-first native ROM fast path after source-contract wrapping fix; no IPA compile.
