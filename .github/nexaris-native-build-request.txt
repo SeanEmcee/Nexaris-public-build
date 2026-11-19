@@ -1,5 +1,7 @@
-Nexaris private native ROM+RapKeys compile requested from public macOS runners.
-Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
-
-Retry after native Nyxian + URL OS signer App Group anchor correction. Full original URL OS 6.4.4, independent widget/JIT helper, fast-launch shortcuts, SwiftLlama, Rap Keys, original ROM, profile deactivation, expiry refresh and BrokenPipe diagnostics.
-Source revision: 4edc074861130719f0e3845f47203dca246bf3f5
+Nexaris private-source native test request.
+Build entry point: public Nexaris CI on main.
+Private source: SeanEmcee/Nexaris feature/nexaris-unified-app.
+Validate Xcode 26.6, embedded Rap Keys keyboard, native Nyxian ROM flash/boot integration, and source regressions.
+Current keyboard fix commit: 1378f9c918f62f35cb18685767496e49065e28d6.
+Current keyboard regression test: 0ae890acc9e12129dc0fa70ac425709f33e1156e.
+No private sources, credentials, build logs or compiled IPAs may be stored in public artifacts.
