@@ -1,5 +1,5 @@
 Nexaris private native ROM+RapKeys compile requested from public macOS runners.
 Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
 
-Native build: FULL original URL OS 6.4.4 source + retained WKWebView + WebKit default JIT + independently signed URL OS widget/JIT helper + original URL OS shortcuts + app deactivation without cached IPA + individual refresh without Files picker + broken idevice socket diagnostics + lazy startup.
-Source revision: 0a72fe9650de7baf4686033f7c9b5007c3fd11f5
+Retry: native ROM + original URL OS 6.4.4 + separate widget/JIT helper + no scheme conflicts + matched per-app refresh, profile-only deactivation, broken device-link diagnostic. Build failure tail printed, no secrets or source in public artifacts.
+Source revision: 0bdfd9223688dbb35d2abf7d9059d86d2fae4f31
