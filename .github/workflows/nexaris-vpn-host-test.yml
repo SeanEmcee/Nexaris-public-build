@@ -1,8 +1,12 @@
 name: Nexaris VPN test host - private source on public runners
 
 # Workflow lives in PUBLIC runner repo; code and unsigned IPA stay PRIVATE.
-# Manually triggered to avoid wasting macOS build minutes or exposing source.
+# Manual or a single, explicitly named push; no automatic Mac builds on source changes.
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/nexaris-vpn-host-test-request.txt'
   workflow_dispatch:
 
 permissions:
@@ -14,7 +18,11 @@ concurrency:
 
 jobs:
   private-preflight:
-    if: github.actor == 'SeanEmcee'
+    if: >-
+      github.actor == 'SeanEmcee' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' &&
+        github.event.head_commit.message == 'ci: launch one Nexaris VPN host test'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -68,7 +76,11 @@ jobs:
           echo "PASS: self-contained Nexaris-branded VPN host prepared."
 
   compile-unsigned:
-    if: github.actor == 'SeanEmcee'
+    if: >-
+      github.actor == 'SeanEmcee' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' &&
+        github.event.head_commit.message == 'ci: launch one Nexaris VPN host test'))
     needs: private-preflight
     runs-on: macos-26-intel
     timeout-minutes: 120
