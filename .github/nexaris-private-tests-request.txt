@@ -35,3 +35,5 @@ Test-only final check: fixed pinned signed-ROM BootViewController fixture and gu
 2026-11-18: Reproduce failures in public build #44476003763 against private unified source; report ONLY failed Python test names and sanitized error summaries. Do not build IPA or publish private logs.
 
 2026-11-18: Verify native Nyxian cross-module Swift compilation repair after failed full build 44476326661: deferred guest UI symbol, window session import, optional workspace, in-ROM app installer. Test-only gate; do not compile IPA.
+
+2026-11-18: Re-run all private source tests after repairing staged Nyxian Python header import syntax, guest-home dynamic symbol assertions and 3 native workspace guards; no macOS IPA compile.
