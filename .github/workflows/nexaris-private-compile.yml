@@ -196,6 +196,11 @@ jobs:
             --output build/Nexaris-native-diagnostics.json \
             > /dev/null 2>&1 || true
           if (( status != 0 )); then
+            # Print only the trailing build diagnostics, avoiding credentials
+            # and proprietary source dumps. Retain full log in PRIVATE release.
+            echo "::group::Native build error tail (last 100 lines)"
+            tail -n 100 build/Nexaris-native-build.log || true
+            echo "::endgroup::"
             echo "::error::Native build failed; the private release contains diagnostics."
             exit "$status"
           fi
