@@ -1,0 +1,115 @@
+name: Nexaris Meow migration - private portable validation
+
+# The workflow is public; source, keys, logs and generated binaries stay private.
+# This test does not build or sign an IPA, or claim the VPN is connected.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/nexaris-meow-migration-request.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    if: >-
+      github.actor == 'SeanEmcee' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' &&
+        github.event.head_commit.message == 'ci: validate private Nexaris Meow migration'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - name: Checkout migration branch without persisting tokens
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/rapbox-meow-migration
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          path: source
+
+      - name: Parse Meow Swift sources and native build script
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v swiftc >/dev/null || { echo "::error::Swift compiler missing on runner"; exit 1; }
+          bash -n scripts/build_nexaris_ios.sh
+          if ! swiftc -frontend -parse \
+            Nexaris/Sources/NexarisMeowProfileBuilder.swift \
+            Nexaris/Sources/NexarisMeowDraftStore.swift \
+            Nexaris/Sources/NexarisMeowWireGuardImporter.swift \
+            Nexaris/Sources/NexarisMeowDeepLink.swift \
+            Nexaris/Sources/NexarisMeowVPNShortcutBridge.swift \
+            Nexaris/Sources/NexarisMeowProfileCreatorView.swift \
+            Nexaris/Sources/NexarisMeowIntegrationView.swift \
+            Nexaris/Sources/NexarisCloudflareSetupWizard.swift \
+            Nexaris/Sources/NexarisRapBoxDashboardView.swift \
+            > /tmp/meow-swift-parse.log 2>&1; then
+            echo "::error::Meow Swift syntax check failed. Source and compiler log withheld."
+            exit 1
+          fi
+          echo "PASS: portable Swift syntax and shell entrypoint"
+
+      - name: Compile and execute Meow routing, WireGuard and Shortcut contracts
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/nexaris-meow-contracts
+          check() {
+            local label="$1"; shift
+            if ! "$@" > /tmp/nexaris-meow-contracts/private.log 2>&1; then
+              echo "::error::Private contract failed: $label (details withheld)"
+              exit 1
+            fi
+            echo "PASS: $label"
+          }
+          check "compile proxy composer" swiftc \
+            Nexaris/Sources/NexarisMeowProfileBuilder.swift \
+            scripts/tests/NexarisMeowProfileSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/proxy
+          check "test proxy composer" /tmp/nexaris-meow-contracts/proxy
+          check "compile enrolled WireGuard mapper" swiftc \
+            Nexaris/Sources/NexarisMeowProfileBuilder.swift \
+            Nexaris/Sources/NexarisMeowWireGuardImporter.swift \
+            scripts/tests/NexarisMeowWireGuardSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/wireguard
+          check "test enrolled WireGuard mapper" /tmp/nexaris-meow-contracts/wireguard
+          check "compile Shortcuts handoff" swiftc \
+            Nexaris/Sources/NexarisMeowVPNShortcutBridge.swift \
+            scripts/tests/NexarisMeowVPNShortcutSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/shortcuts
+          check "test Shortcuts handoff" /tmp/nexaris-meow-contracts/shortcuts
+          check "compile protected draft store" swiftc \
+            Nexaris/Sources/NexarisMeowProfileBuilder.swift \
+            Nexaris/Sources/NexarisMeowDraftStore.swift \
+            scripts/tests/NexarisMeowDraftSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/drafts
+          check "test protected draft store" /tmp/nexaris-meow-contracts/drafts
+          check "compile Meow deep links" swiftc \
+            Nexaris/Sources/NexarisMeowDeepLink.swift \
+            scripts/tests/NexarisMeowDeepLinkSmoke.swift \
+            -o /tmp/nexaris-meow-contracts/deeplinks
+          check "test Meow deep links" /tmp/nexaris-meow-contracts/deeplinks
+
+      - name: Run Rap Box source contracts and dashboard regressions
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! python3 scripts/check_nexaris_rapbox_mt.py > /tmp/meow-contracts.log 2>&1; then
+            grep '^FAIL:' /tmp/meow-contracts.log | head -n 20 || true
+            echo "::error::Meow source contract check failed (details withheld)"
+            exit 1
+          fi
+          echo "PASS: Rap Box source contracts"
+          if ! python3 -m unittest discover -s scripts/tests \
+            -p 'test_nexaris_rapbox_original_dashboard.py' > /tmp/meow-dashboard.log 2>&1; then
+            echo "::error::Dashboard source regression check failed"
+            exit 1
+          fi
+          echo "PASS: Rap Box dashboard source regressions"
