@@ -1,5 +1,5 @@
 Nexaris private native ROM+RapKeys compile requested from public macOS runners.
 Trigger guarded by owner and exact commit message. Private source and artifacts must stay private.
 
-Retry: native ROM + original URL OS 6.4.4 + separate widget/JIT helper + no scheme conflicts + matched per-app refresh, profile-only deactivation, broken device-link diagnostic. Build failure tail printed, no secrets or source in public artifacts.
-Source revision: 0bdfd9223688dbb35d2abf7d9059d86d2fae4f31
+Retry after native Nyxian + URL OS signer App Group anchor correction. Full original URL OS 6.4.4, independent widget/JIT helper, fast-launch shortcuts, SwiftLlama, Rap Keys, original ROM, profile deactivation, expiry refresh and BrokenPipe diagnostics.
+Source revision: 4edc074861130719f0e3845f47203dca246bf3f5
