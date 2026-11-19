@@ -37,3 +37,5 @@ Test-only final check: fixed pinned signed-ROM BootViewController fixture and gu
 2026-11-18: Verify native Nyxian cross-module Swift compilation repair after failed full build 44476326661: deferred guest UI symbol, window session import, optional workspace, in-ROM app installer. Test-only gate; do not compile IPA.
 
 2026-11-18: Re-run all private source tests after repairing staged Nyxian Python header import syntax, guest-home dynamic symbol assertions and 3 native workspace guards; no macOS IPA compile.
+
+2026-11-19: Source-only regression after native Nyxian optional LDEApplicationWorkspace.allApplicationObjects() Swift compile fix from failed full build #44482265582; verify both inventory paths use [] fallback, no macOS compile.
