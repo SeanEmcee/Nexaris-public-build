@@ -36,6 +36,8 @@ jobs:
       github.event.head_commit.message == 'ci: launch one private Nexaris build'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      verified_private_sha: ${{ steps.capture_private_sha.outputs.sha }}
     steps:
       - name: Require all private-access and output secrets before macOS
         shell: bash
@@ -61,6 +63,25 @@ jobs:
           persist-credentials: false
           submodules: recursive
           path: source
+      - name: Pin checked private Nexaris source commit
+        id: capture_private_sha
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Run complete private source regression gate before macOS
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' \\
+            > build/Nexaris-regression-gate.log 2>&1 || {
+              echo "::error::Nexaris full private regression suite failed; macOS build blocked."
+              exit 1
+            }
+          echo "PASS: full Nexaris source regression suite."
       - name: Run targeted Build 23 tests before paying for macOS time
         shell: bash
         working-directory: source
@@ -103,6 +124,9 @@ jobs:
       NEXARIS_BUILD_MODE: "full"
       NEXARIS_KEYBOARD_COMPILE_FIRST: "0"
       NEXARIS_CACHE_PRIME_ONLY: "0"
+      # ROM integrity test is explicit. The actual native Nyxian LiveProcess
+      # extension is provided by the Nyxian target, not the alternate LC path.
+      NEXARIS_ROM_HASH_SELFTEST: "1"
       NEXARIS_UPSTREAM_GITHUB_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -118,13 +142,14 @@ jobs:
           test "${NEXARIS_BUILD_MODE}" = full
           test "${NEXARIS_KEYBOARD_COMPILE_FIRST}" = 0
           test "${NEXARIS_CACHE_PRIME_ONLY}" = 0
+          test "${NEXARIS_ROM_HASH_SELFTEST}" = 1
           echo "Full native Nyxian build selected (Nyxian supplies its own LiveProcess.appex)."
       - name: Checkout original private Nexaris without publishing it
         id: private_checkout
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: feature/nexaris-unified-app
+          ref: ${{ needs.private-preflight.outputs.verified_private_sha }}
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           submodules: recursive
           persist-credentials: false
