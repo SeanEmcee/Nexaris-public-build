@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: 4cc839b56930e55d202b23030cd1cd1d5cdd0118
+          ref: 67c3a94f9604dd409d15b9a785e13088cb447ab1
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -46,12 +46,19 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, 'scripts')
           from patch_nexaris_scoped_worker_dispatch import RELATIVE, patch
+          from patch_nexaris_scoped_worker_permissions import (
+              RELATIVE as PERMISSIONS_PATH, patch as strip_permissions
+          )
           original = (Path('build/pinned-Nyxian') / RELATIVE).read_text()
           revised = patch(original)
           assert revised.count('NexarisSelectScopedROMWorker') == 2
           assert 'if(extension == nil) { return nil; }' in revised
           assert 'return PEGetNSExtension();' in revised
-          print('PASS: A/B worker selector applies to exact pinned native Nyxian source')
+          process = (Path('build/pinned-Nyxian') / PERMISSIONS_PATH).read_text()
+          restricted = strip_permissions(process)
+          assert '[restrictedItems setObject:@[] forKey:@"PEFilePermissions"]' in restricted
+          assert 'else if(sb_identity->filePermissions != NULL)' in restricted
+          print('PASS: exact pinned Nyxian worker selector and zero-inherited-grants patches')
           PY
           } > build/Nexaris-ROM-worker-validation-private.log 2>&1
           result=$?
@@ -76,7 +83,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: 4cc839b56930e55d202b23030cd1cd1d5cdd0118','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: 67c3a94f9604dd409d15b9a785e13088cb447ab1','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
