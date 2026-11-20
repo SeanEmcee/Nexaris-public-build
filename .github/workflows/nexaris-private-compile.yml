@@ -208,6 +208,7 @@ jobs:
       # Diagnostic compile-first: preserve source failures as RED but reach
       # Xcode and collect native compiler/linker evidence. This is NOT a
       # release build and its final CI outcome remains failure when tests fail.
+      # Only a separately verified iPhone launch can certify ROM functionality.
       NEXARIS_FIRST_COMPILE: "1"
       NEXARIS_BUILD_MODE: "full"
       # Fail fast on Rap Keys native iPhoneOS compiler errors before the full Nyxian build.
