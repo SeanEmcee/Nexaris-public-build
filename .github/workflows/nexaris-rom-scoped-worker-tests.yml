@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: 0ba0f50af71544334934ce12e651f6e7215df38c
+          ref: f41d71be13efa494f62720f203950498b605b294
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -58,7 +58,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: 0ba0f50af71544334934ce12e651f6e7215df38c','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: f41d71be13efa494f62720f203950498b605b294','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
