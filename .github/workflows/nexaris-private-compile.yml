@@ -125,6 +125,35 @@ jobs:
             exit 1
           }
           echo "PASS: Nexaris host, ROM workspace and live guest launch integration contracts."
+      - name: Require all pinned Nyxian JIT and A/B worker patches to apply before Xcode
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git \
+            build/pinned-Nyxian-patch-preflight > /dev/null 2>&1
+          git -C build/pinned-Nyxian-patch-preflight fetch --depth=1 origin \
+            9236c22f146a0f63bb597e629573e151ae4d4df7 > /dev/null 2>&1
+          git -C build/pinned-Nyxian-patch-preflight checkout --detach \
+            9236c22f146a0f63bb597e629573e151ae4d4df7 > /dev/null 2>&1
+          python3 - <<'PY' > build/Nexaris-pinned-patch-preflight-private.log 2>&1
+          from pathlib import Path
+          import sys
+          sys.path.insert(0,'scripts')
+          from patch_nexaris_nyxian_jit_probe import apply as probe
+          from patch_nexaris_scoped_worker_dispatch import apply as dispatch
+          from patch_nexaris_scoped_worker_permissions import apply as permissions
+          from patch_nexaris_scoped_worker_lineage import apply as lineage
+          from patch_nexaris_scoped_worker_syscall_gate import apply as syscall_gate
+          checkout=Path('build/pinned-Nyxian-patch-preflight')
+          probe(checkout,check=False)
+          dispatch(checkout,check=False)
+          permissions(checkout,check=False)
+          lineage(checkout,check=False)
+          syscall_gate(checkout,check=False)
+          print('PASS: pinned Nyxian JIT canary and five scoped worker security patch paths')
+          PY
+          echo "PASS: exact pinned native source patch application before macOS Xcode."
       - name: Run Build 23 source diagnostics (retain failed contracts)
         id: build23
         shell: bash
@@ -385,6 +414,7 @@ jobs:
             build/Nexaris-metal.log \
             build/Nexaris-native-preflight.log \
             build/Nexaris-integration-contracts-private.log \
+            build/Nexaris-pinned-patch-preflight-private.log \
             build/Nexaris-native-build.log \
             build/Nexaris-native-diagnostics.json \
             build/Nexaris-package-checks.log \
