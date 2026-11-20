@@ -1,0 +1,74 @@
+name: Private Nexaris Xcode diagnostics triage (no public source)
+on:
+  push:
+    branches: [feature/nyxian-source-ref-routing-20261120]
+    paths: ['.github/workflows/nexaris-native-private-failure-triage.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-triage:
+    if: github.actor == 'SeanEmcee'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch failed build logs from PRIVATE Nexaris draft release
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "$GH_TOKEN" ]] || { echo "::error::Private diagnostic token unavailable"; exit 2; }
+          mkdir -p /tmp/nexaris-private-native-diagnostics
+          gh release download nexaris-actions-44766890621 \
+            --repo SeanEmcee/Nexaris \
+            --dir /tmp/nexaris-private-native-diagnostics \
+            --pattern 'Nexaris-native-build.log' \
+            --pattern 'Nexaris-native-diagnostics.json'
+          test -s /tmp/nexaris-private-native-diagnostics/Nexaris-native-build.log
+          echo "Private diagnostic logs fetched; no source or details printed publicly."
+      - name: Send focused Swift/Clang compiler failures to PRIVATE PR 44
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re
+          base=Path('/tmp/nexaris-private-native-diagnostics')
+          lines=(base/'Nexaris-native-build.log').read_text(errors='replace').splitlines()
+          captured=[]
+          for i,line in enumerate(lines):
+              if (re.search(r'(?i)(?:error:|fatal error:|BUILD FAILED|Undefined symbols for architecture|SwiftCompile failed|CompileSwift.*failed|Clang.*failed|module not found|No such module|Xcode could not)',line)
+                  and not 'warning:' in line.lower()):
+                  captured.append((i,line[:900]))
+          output=['### Nexaris Native Xcode Diagnostic — FAILED','',
+                  'Source: private Nexaris build run 44766890621',
+                  'The broad source regression suite also failed; this native build was diagnostic only.',
+                  '',
+                  'First compiler errors and nearby context (private only):','']
+          for i,line in captured[:35]:
+              output.append('**Log line '+str(i+1)+'**')
+              output.append('```text')
+              output.extend(l[:750] for l in lines[max(0,i-2):min(len(lines),i+3)])
+              output.append('```')
+          if not captured:
+              output.extend(['No standard compiler-error pattern matched.','Last 70 private log lines:','```text'])
+              output.extend(l[:750] for l in lines[-70:])
+              output.append('```')
+          file=base/'Nexaris-native-diagnostics.json'
+          if file.exists():
+              try:
+                  data=json.loads(file.read_text())
+                  output.extend(['','Structured compiler diagnostics (private):','```json',
+                                 json.dumps(data,indent=2)[:7000],'```'])
+              except (ValueError,OSError):
+                  pass
+          out=Path('/tmp/nexaris-compiler-triage-private.md')
+          out.write_text('\n'.join(output)[:34000])
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris \
+            --body-file /tmp/nexaris-compiler-triage-private.md >/dev/null
+          echo "Private PR 44 updated with relevant compiler diagnostics only."
+      - name: Erase local private build diagnostics
+        if: always()
+        run: rm -rf /tmp/nexaris-private-native-diagnostics /tmp/nexaris-compiler-triage-private.md
