@@ -5,6 +5,12 @@ on:
     paths:
       - '.github/nexaris-private-tests-request.txt'
   workflow_dispatch:
+    inputs:
+      private_source_ref:
+        description: "Private Nexaris source revision to test (not compiled)"
+        type: string
+        required: true
+        default: "fix/urlos-direct-first-frame-20261119"
 
 permissions:
   contents: read
@@ -23,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: feature/nexaris-unified-app
+          ref: ${{ inputs.private_source_ref || 'fix/urlos-direct-first-frame-20261119' }}
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           path: source
