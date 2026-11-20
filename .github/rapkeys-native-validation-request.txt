@@ -1,8 +1,8 @@
-Rap Keys native iPhoneOS keyboard-extension validation request #2
-Public workflow: .github/workflows/rapkeys-private-parity-validation.yml
-Private branch: feature/rapkeys-parity-unified-20261119
-Expected new private HEAD: 4edbbb042d14a741236004948f6e3a02f4d03c53
-Change: fix optional UITextDocumentProxy.returnKeyType rawValue access found by Xcode 26.6.
-Run private source contracts and Xcode unsigned keyboard target.
-Store all compiler logs and diagnostics in PRIVATE Nexaris draft release only.
-Never upload private source, binaries, or logs to the public runner repository.
+Rap Keys Liquid Glass shared pill slider validation #3
+Private source: SeanEmcee/Nexaris feature/nexaris-unified-app
+Source head: 53cb5a4086afcaa015e87bd1b061de4717106583
+Check every Rap Keys companion slider uses the white rounded pill thumb and red progress track.
+Check Clear-to-Tinted glass appearance, per-control range/step and VoiceOver controls.
+Check keyboard-contained UIKit sliders use matching pill images and red tracks.
+Run source contracts and native iPhoneOS keyboard extension Xcode 26.6 compile.
+All private diagnostic logs and unsigned binaries stay in private Nexaris draft releases.
