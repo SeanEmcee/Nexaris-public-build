@@ -1,7 +1,7 @@
-Rap Keys quick actions + resumable local AI and diagnostics QA #6
-Private Nexaris source: feature/nexaris-unified-app at 61e4be237d238a48281a7ff83dd0efd77a64d542
-Validate keyboard QuickType retained at three slots while configurable toolbar actions scroll separately.
-Validate icon pack/photo/emoji, iOS Files provider text import, and honest ChatGPT / app launch setup constraints.
-Validate URLSession GGUF progress/pause/resume and on-device AI self checks.
-Run source contracts, all companion Swift parses and native keyboard iPhoneOS unsigned compile.
-Private diagnostics and source must stay inside PRIVATE Nexaris repository.
+Rap Keys keyboard extensions checklist, Google and local AI validation #6
+Private source SeanEmcee/Nexaris feature/nexaris-unified-app
+Head c781f5fafa9bf72d52f16e226ac42bd2295e177f
+Check all 8 user-configurable quick actions and preserved QuickType 3-slot row.
+Verify in-keyboard reorder handles/checkmarks, Google query composer, offline chat.
+Swift syntax parse all native and host companion source files.
+Actual native iPhoneOS keyboard extension compile and protected private diagnostics.
