@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: c2f81c65854a2379838c357abb77a4fb5a9961da
+          ref: a1fd440be93ae95af813658ca4625d9a38d716ba
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -96,6 +96,10 @@ jobs:
           assert 'err = EPERM;' in broker and 'goto cleanup;' in broker
           print('PASS: pinned Nyxian A/B process lineage and privileged syscall denial')
           PY
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_active_rom_boot_proof.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_guest_render_receipt.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_my_device_cold_start_and_nyxian_install.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_rom_startup_recovery.py -v
           CHECKS
           result=0
           bash /tmp/nexaris-rom-worker-check.sh > build/Nexaris-ROM-worker-validation-private.log 2>&1 || result=$?
@@ -119,7 +123,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: c2f81c65854a2379838c357abb77a4fb5a9961da','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: a1fd440be93ae95af813658ca4625d9a38d716ba','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
