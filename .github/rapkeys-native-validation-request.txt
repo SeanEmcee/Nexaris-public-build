@@ -1,8 +1,7 @@
-Rap Keys offline LLM catalog and hardware recommendation validation #5
-Private source: SeanEmcee/Nexaris feature/nexaris-unified-app
-Private head: 4908e526d8d9ee125efa4ff861f33b830d0a3dc3
-Verify 3 published SHA256-pinned GGUF downloads and native RAM/device detection.
-Verify offline model selector, per-model strengths and weaknesses, green/red display.
-Verify original one-use keyboard-to-host offline inference handoff and no cloud prompts.
-Run source regression suite, Swift syntax parse for all Rap Keys companion screens,
-and native iPhoneOS keyboard extension compilation. Private source stays private.
+Rap Keys quick actions + resumable local AI and diagnostics QA #6
+Private Nexaris source: feature/nexaris-unified-app at 61e4be237d238a48281a7ff83dd0efd77a64d542
+Validate keyboard QuickType retained at three slots while configurable toolbar actions scroll separately.
+Validate icon pack/photo/emoji, iOS Files provider text import, and honest ChatGPT / app launch setup constraints.
+Validate URLSession GGUF progress/pause/resume and on-device AI self checks.
+Run source contracts, all companion Swift parses and native keyboard iPhoneOS unsigned compile.
+Private diagnostics and source must stay inside PRIVATE Nexaris repository.
