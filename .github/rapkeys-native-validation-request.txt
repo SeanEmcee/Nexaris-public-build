@@ -1,8 +1,8 @@
-Rap Keys Liquid Glass shared pill slider validation #3
+Rap Keys Liquid Glass shared pill slider validation #4
 Private source: SeanEmcee/Nexaris feature/nexaris-unified-app
-Source head: 53cb5a4086afcaa015e87bd1b061de4717106583
-Check every Rap Keys companion slider uses the white rounded pill thumb and red progress track.
-Check Clear-to-Tinted glass appearance, per-control range/step and VoiceOver controls.
-Check keyboard-contained UIKit sliders use matching pill images and red tracks.
-Run source contracts and native iPhoneOS keyboard extension Xcode 26.6 compile.
-All private diagnostic logs and unsigned binaries stay in private Nexaris draft releases.
+Private head: fab918d0dd5895c0f12b7751a3876f6c8ace36e5
+All Studio sliders use white rounded glass pill thumbs and red filled tracks.
+Keyboard-contained UIKit sliders use corresponding white pill imagery and red tracks.
+Clear-to-Tinted remains independent of other sliders and preserves gradient colors.
+Run source regressions and native iPhoneOS keyboard extension compile; privacy safe.
+All private diagnostics remain inside PRIVATE Nexaris draft releases.
