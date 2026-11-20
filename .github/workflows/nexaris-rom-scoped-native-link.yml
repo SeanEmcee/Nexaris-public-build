@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: 45f850dfde0d53386b1d5548c9126d8604a53270
+          ref: 34e734d90cba6eecab96e47fea64ee6c8655ecd8
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -42,7 +42,7 @@ jobs:
           mkdir -p build
           cat > /tmp/nexaris-scoped-rom-native.sh <<'CHECK'
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "45f850dfde0d53386b1d5548c9126d8604a53270"
+          test "$(git rev-parse HEAD)" = "34e734d90cba6eecab96e47fea64ee6c8655ecd8"
           python3 scripts/prepare_nexaris_signed_guest_rom.py --check
           python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_lineage.py -v
           mkdir -p build/vendor
@@ -92,6 +92,23 @@ jobs:
           print('PASS: full unsigned ARM64 guest ROM principal linked with scoped worker process and syscall changes')
           PY
           test ! -e build/NexarisSignedROMPreflight/rom.zip
+          # Full signed-package format smoke test using an EPHEMERAL LOCAL
+          # key; no real emexLabs TrustStore registration or install ticket.
+          # Never upload or distribute this untrusted signed test archive.
+          (
+            set -euo pipefail
+            cd build/NexarisSignedROMPreflight
+            mkdir -p .ci-untrusted-keys
+            python3 -I RomGen.py genkey --name ci-ephemeral \
+              --out "$PWD/.ci-untrusted-keys"
+            make -j3 \
+              ROM_SIGNING_KEY="$PWD/.ci-untrusted-keys/ci-ephemeral.key.pem" \
+              ROM_OUT="$PWD/ci-untrusted-test.zip"
+            python3 -I RomGen.py verify "$PWD/ci-untrusted-test.zip" \
+              --public "$PWD/.ci-untrusted-keys/ci-ephemeral.pub.pem"
+            echo "PASS: Nyxian ROM format signed and verified with OFFLINE, UNTRUSTED TEST KEY"
+            rm -rf .ci-untrusted-keys ci-untrusted-test.zip
+          )
           CHECK
           code=0
           bash /tmp/nexaris-scoped-rom-native.sh > build/Nexaris-ROM-scoped-native-private.log 2>&1 || code=$?
@@ -116,7 +133,7 @@ jobs:
           f=Path('build/Nexaris-ROM-scoped-native-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           result=['### Scoped ROM native ARM64 link: '+os.getenv('BUILD_RESULT','not run'),
-                  '', 'Source: 45f850dfde0d53386b1d5548c9126d8604a53270', 'This is private unsigned compile only; Apple-signing/device isolation remains untested.',
+                  '', 'Source: 34e734d90cba6eecab96e47fea64ee6c8655ecd8', 'Private ARM64 ROM compile and optional ephemeral offline signing smoke; TRUSTED release signing/device isolation remain untested.',
                   '', 'Relevant PRIVATE compiler diagnostics:']
           errors=[line[:600] for line in lines if re.search(r'error:|fatal error:|FAILED|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|undefined symbol|Kernel|RuntimeError',line,re.I)]
           if os.getenv('BUILD_RESULT')!='success' and not errors: errors=lines[-45:]
