@@ -114,6 +114,17 @@ jobs:
             fi
             echo "PASS: mandatory ROM isolation $suite"
           done
+      - name: Mandatory Nexaris ROM launch integration source gate
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          python3 scripts/check_nexaris_integrations.py \
+            > build/Nexaris-integration-contracts-private.log 2>&1 || {
+            echo "::error::Native Nexaris source contract gate failed before Xcode; private diagnostics retained."
+            exit 1
+          }
+          echo "PASS: Nexaris host, ROM workspace and live guest launch integration contracts."
       - name: Run Build 23 source diagnostics (retain failed contracts)
         id: build23
         shell: bash
@@ -369,6 +380,7 @@ jobs:
           for f in \
             build/Nexaris-metal.log \
             build/Nexaris-native-preflight.log \
+            build/Nexaris-integration-contracts-private.log \
             build/Nexaris-native-build.log \
             build/Nexaris-native-diagnostics.json \
             build/Nexaris-package-checks.log \
