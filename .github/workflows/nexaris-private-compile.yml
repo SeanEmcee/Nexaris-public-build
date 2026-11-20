@@ -105,6 +105,10 @@ jobs:
             test_nexaris_scoped_worker_dispatch.py \
             test_nexaris_scoped_worker_lineage.py \
             test_nexaris_scoped_worker_signing.py \
+            test_nexaris_scoped_rom_slot_groups.py \
+            test_nexaris_worker_embedded_provisioning.py \
+            test_nexaris_scoped_worker_syscall_syntax.py \
+            test_nexaris_scoped_rom_ipa.py \
             test_nexaris_rom_filesystem_confinement_gate.py \
             test_nexaris_rom_rootfd_semantics.py; do
             if ! python3 -m unittest discover -s scripts/tests -p "$suite" \
