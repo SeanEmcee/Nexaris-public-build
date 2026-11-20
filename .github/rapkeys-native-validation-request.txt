@@ -5,3 +5,5 @@ Check all 8 user-configurable quick actions and preserved QuickType 3-slot row.
 Verify in-keyboard reorder handles/checkmarks, Google query composer, offline chat.
 Swift syntax parse all native and host companion source files.
 Actual native iPhoneOS keyboard extension compile and protected private diagnostics.
+
+2026-11-20: ChatGPT keyboard Chat-only manual prompt-copy safeguard against consuming Work/Codex allowance. Private Rap Keys branch 7737dd4abf5d0f67c6085e024810098f8f8ad7b6. Verify new AI panel keyboard screen and 3 preserved QuickType cells; run source contracts and iPhoneOS keyboard compile. Do not use third-party partner OAuth tokens or ChatGPT backend API. Keep diagnostics private.
