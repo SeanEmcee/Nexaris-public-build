@@ -52,6 +52,7 @@ jobs:
           mkdir -p build
           result=0
           python3 -m unittest \
+            scripts.tests.test_rapkeys_quick_actions_source_contract \
             scripts.tests.test_rapkeys_unified_parity_contracts \
             scripts.tests.test_rapkeys_90_source_contracts \
             scripts.tests.test_rapkeys_95_source_contracts \
