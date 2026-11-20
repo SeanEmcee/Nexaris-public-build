@@ -1,8 +1,8 @@
-Rap Keys native iPhoneOS keyboard-extension validation request
+Rap Keys native iPhoneOS keyboard-extension validation request #2
 Public workflow: .github/workflows/rapkeys-private-parity-validation.yml
-Private source: SeanEmcee/Nexaris
 Private branch: feature/rapkeys-parity-unified-20261119
-Private HEAD observed before request: 0db397a80c1f81208677bf32bb1c2f3b62d3b47c
-Scope: real unsigned keyboard extension compile, not the entire Nexaris/ROM IPA.
-Logs and diagnostics: PRIVATE Nexaris draft release only.
-No private source, binaries, or logs in this public repository.
+Expected new private HEAD: 4edbbb042d14a741236004948f6e3a02f4d03c53
+Change: fix optional UITextDocumentProxy.returnKeyType rawValue access found by Xcode 26.6.
+Run private source contracts and Xcode unsigned keyboard target.
+Store all compiler logs and diagnostics in PRIVATE Nexaris draft release only.
+Never upload private source, binaries, or logs to the public runner repository.
