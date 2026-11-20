@@ -370,13 +370,6 @@ jobs:
           ( cd build && shasum -a 256 Nexaris-Nyxian-private-unsigned.ipa \
             > Nexaris-Nyxian-private-unsigned.ipa.sha256 )
           echo "Verified unsigned IPA packaged locally, NOT publicly published."
-      - name: Save only public Cargo crate downloads for later jobs
-        if: always()
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          key: nexaris-public-crates-x266-v1-${{ github.run_id }}
-          path: ~/.cargo/registry
       # DO NOT upload private logs or IPA as public Actions artifacts.
       # Store them as a DRAFT release of the original PRIVATE repository.
       - name: Deliver logs and IPA privately as a draft release
@@ -410,6 +403,13 @@ jobs:
             --title "Nexaris private CI #$GITHUB_RUN_ID" --draft \
             --notes "Private unsigned build output. Original source commit: $source_sha. Signed device installation and ROM execution NOT verified."
           echo "Output stored as a draft release inside the PRIVATE Nexaris repository."
+      - name: Save only public Cargo crate downloads for later jobs
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          key: nexaris-public-crates-x266-v1-${{ github.run_id }}
+          path: ~/.cargo/registry
       - name: Keep full-release validation FAILED when broad regressions remain
         if: always() && needs.private-preflight.result == 'success'
         shell: bash
