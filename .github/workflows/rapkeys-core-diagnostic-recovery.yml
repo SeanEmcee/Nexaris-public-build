@@ -1,0 +1,50 @@
+name: Rap Keys private Core XCTest diagnostic recovery
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/rapkeys-core-diagnostic-recovery.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    if: github.actor == 'SeanEmcee'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+    steps:
+      - name: Collect complete test names and assertions privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${GH_TOKEN:-}" || exit 2
+          mkdir -p /tmp/rapkeys-core-recover
+          gh api -H 'Accept: application/octet-stream' \
+            repos/SeanEmcee/Nexaris/releases/assets/770728601 \
+            > /tmp/rapkeys-core-recover/test.log
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('/tmp/rapkeys-core-recover/test.log')
+          lines=p.read_text(errors='replace').splitlines()
+          matches=[]
+          for line in lines:
+              if ' error:' in line or ("Test Case '" in line and "' failed" in line):
+                  if len(matches)<120:
+                      clean=re.sub(r'/Users/[^ /]+/work/[^ ]+/source/','',line)
+                      matches.append(clean[:450])
+          output=['## Full Rap Keys Core XCTest failures (private)','',
+                  'Source: public macOS workflow 44687184068; private XCTest log.',
+                  'No private source or logs were uploaded publicly.','',
+                  '### Failing assertions and cases','']
+          output += ['- '+line for line in matches]
+          if not matches:
+              output.append('- Log contains no recognizable failing test lines.')
+          Path('/tmp/rapkeys-core-recover/comment.md').write_text('\n'.join(output))
+          PY
+          gh issue comment 46 --repo SeanEmcee/Nexaris \
+            --body-file /tmp/rapkeys-core-recover/comment.md >/dev/null
+          echo 'Core test failures delivered only to private PR.'
