@@ -1,0 +1,144 @@
+name: Nexaris scoped-ROM native ARM64 link validation
+on:
+  push:
+    branches: [feature/nyxian-source-ref-routing-20261120]
+    paths: ['.github/workflows/nexaris-rom-scoped-native-link.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  link-sandboxed-rom-source:
+    if: github.actor == 'SeanEmcee'
+    runs-on: macos-26-intel
+    timeout-minutes: 65
+    steps:
+      - name: Check private source/diagnostic access
+        env:
+          SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          [[ -n "$SOURCE_TOKEN" && -n "$OUTPUT_TOKEN" ]] || exit 2
+      - name: Checkout exact private Nexaris revision
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: 34e734d90cba6eecab96e47fea64ee6c8655ecd8
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          submodules: false
+          path: source
+      - name: Set exact Xcode 26.6
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.6.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+      - name: Generate, compile and link unsigned ROM with lineage and syscall restrictions
+        id: native
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cat > /tmp/nexaris-scoped-rom-native.sh <<'CHECK'
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "34e734d90cba6eecab96e47fea64ee6c8655ecd8"
+          python3 scripts/prepare_nexaris_signed_guest_rom.py --check
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_lineage.py -v
+          mkdir -p build/vendor
+          git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/vendor/Nyxian
+          git -C build/vendor/Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
+          git -C build/vendor/Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
+          python3 scripts/prepare_nexaris_signed_guest_rom.py --nyxian build/vendor/Nyxian --output build/NexarisSignedROMPreflight --first-release --security-version 1 --reuse-preflight
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from patch_nexaris_scoped_worker_dispatch import RELATIVE as DISPATCH, patch as selector
+          from patch_nexaris_scoped_worker_permissions import RELATIVE as PERMS, patch as zero_grants
+          from patch_nexaris_scoped_worker_lineage import PATCHES, BASE, transform
+          from patch_nexaris_scoped_worker_syscall_gate import RELATIVE as SYSCALL, patch as deny_global
+          target=Path('build/NexarisSignedROMPreflight/rom/src')
+          def inside(source):
+              text=str(source)
+              assert text.startswith('Nyxian/')
+              path=target/text[len('Nyxian/'):]
+              assert path.is_file(), 'ROM generated source missing expected native file: '+str(path)
+              return path
+          dispatch=inside(DISPATCH)
+          dispatch.write_text(selector(dispatch.read_text()))
+          process=inside(PERMS)
+          process.write_text(zero_grants(process.read_text()))
+          contents={name:inside(name).read_text() for name in PATCHES}
+          contents[PERMS]=process.read_text()
+          for name, revised in transform(contents).items():
+              inside(name).write_text(revised)
+          syscall=inside(SYSCALL)
+          syscall.write_text(deny_global(syscall.read_text()))
+          assert 'nexarisROMWorkerSlot' in inside(BASE/'Surface/proc/def.h').read_text()
+          print('PASS: A/B scope, descendant inheritance, zero file grants, and global syscall gate staged in exact ROM sources')
+          PY
+          make -C build/NexarisSignedROMPreflight guest-native-check
+          make -C build/NexarisSignedROMPreflight -j3 main
+          test -s build/NexarisSignedROMPreflight/main
+          xcrun lipo build/NexarisSignedROMPreflight/main -verify_arch arm64
+          xcrun nm -gU build/NexarisSignedROMPreflight/main > build/Nexaris-ROM-scoped-exports-private.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          symbols={line.split()[-1].lstrip('_') for line in Path('build/Nexaris-ROM-scoped-exports-private.txt').read_text().splitlines() if line.split()}
+          expected=('NXSlotMain','NXSlotCreateWindow','NXSlotDidAppear','NexarisROMProcursusRequestV1','NexarisROMProcursusFreeV1','NexarisROMPresentDEBImporterV1')
+          missing=set(expected)-symbols
+          if missing: raise SystemExit('Required ROM exports absent: '+str(sorted(missing)))
+          print('PASS: full unsigned ARM64 guest ROM principal linked with scoped worker process and syscall changes')
+          PY
+          test ! -e build/NexarisSignedROMPreflight/rom.zip
+          # Full signed-package format smoke test using an EPHEMERAL LOCAL
+          # key; no real emexLabs TrustStore registration or install ticket.
+          # Never upload or distribute this untrusted signed test archive.
+          (
+            set -euo pipefail
+            cd build/NexarisSignedROMPreflight
+            mkdir -p .ci-untrusted-keys
+            python3 -I RomGen.py genkey --name ci-ephemeral \
+              --out "$PWD/.ci-untrusted-keys"
+            make -j3 \
+              ROM_SIGNING_KEY="$PWD/.ci-untrusted-keys/ci-ephemeral.key.pem" \
+              ROM_OUT="$PWD/ci-untrusted-test.zip"
+            python3 -I RomGen.py verify "$PWD/ci-untrusted-test.zip" \
+              --public "$PWD/.ci-untrusted-keys/ci-ephemeral.pub.pem"
+            echo "PASS: Nyxian ROM format signed and verified with OFFLINE, UNTRUSTED TEST KEY"
+            rm -rf .ci-untrusted-keys ci-untrusted-test.zip
+          )
+          CHECK
+          code=0
+          bash /tmp/nexaris-scoped-rom-native.sh > build/Nexaris-ROM-scoped-native-private.log 2>&1 || code=$?
+          if (( code )); then
+            echo "::error::Scoped ROM native C/ObjC/Swift link failed; see private Nexaris PR diagnostics."
+            exit "$code"
+          fi
+          echo "PASS: scoped ROM native executable compiled and linked unsigned, not signed, installed or sandbox-certified."
+      - name: Report narrowly scoped results in PRIVATE Nexaris
+        if: always()
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          BUILD_RESULT: ${{ steps.native.outcome }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || exit 0
+          python3 - <<'PY'
+          import os,re
+          from pathlib import Path
+          f=Path('build/Nexaris-ROM-scoped-native-private.log')
+          lines=f.read_text(errors='replace').splitlines() if f.exists() else []
+          result=['### Scoped ROM native ARM64 link: '+os.getenv('BUILD_RESULT','not run'),
+                  '', 'Source: 34e734d90cba6eecab96e47fea64ee6c8655ecd8', 'Private ARM64 ROM compile and optional ephemeral offline signing smoke; TRUSTED release signing/device isolation remain untested.',
+                  '', 'Relevant PRIVATE compiler diagnostics:']
+          errors=[line[:600] for line in lines if re.search(r'error:|fatal error:|FAILED|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|undefined symbol|Kernel|RuntimeError',line,re.I)]
+          if os.getenv('BUILD_RESULT')!='success' and not errors: errors=lines[-45:]
+          result.extend(['- '+x for x in errors[-75:]] if errors else ['- No errors.'])
+          Path('/tmp/nexaris-scoped-rom-native.md').write_text('\n'.join(result))
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris --body-file /tmp/nexaris-scoped-rom-native.md >/dev/null
+      # Do not upload compiled EPSL binaries, private logs or source to the PUBLIC repo.

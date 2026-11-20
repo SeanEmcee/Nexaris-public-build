@@ -1,0 +1,135 @@
+name: Nexaris private A-B ROM worker security tests (no public source)
+on:
+  push:
+    branches: [feature/nyxian-source-ref-routing-20261120]
+    paths: ['.github/workflows/nexaris-rom-scoped-worker-tests.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scoped-worker-check:
+    if: github.actor == 'SeanEmcee'
+    runs-on: macos-26-intel
+    timeout-minutes: 15
+    steps:
+      - name: Verify private source/output credentials
+        env:
+          SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          [[ -n "$SOURCE_TOKEN" && -n "$OUTPUT_TOKEN" ]] || exit 2
+      - name: Checkout pinned PRIVATE Nexaris source
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: 3ce59884495ad6128e81bc37f44b5c36a0988f68
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          submodules: false
+          path: source
+      - name: Execute worker creation and signature policy tests
+        id: check
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          # Run with errexit INSIDE the test runner. A prior grouped
+          # command with set +e could falsely report success if an early
+          # test failed but the final source probe succeeded.
+          cat > /tmp/nexaris-rom-worker-check.sh <<'CHECKS'
+          set -euo pipefail
+          python3 scripts/check_nexaris_integrations.py
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_rom_workers.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_dispatch.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_lineage.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_signing.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_rom_slot_groups.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_syscall_syntax.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_worker_embedded_provisioning.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_rom_ipa.py -v
+          git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/pinned-Nyxian
+          git -C build/pinned-Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
+          git -C build/pinned-Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from patch_nexaris_scoped_worker_dispatch import RELATIVE, patch
+          from patch_nexaris_scoped_worker_permissions import (
+              RELATIVE as PERMISSIONS_PATH, patch as strip_permissions
+          )
+          from patch_nexaris_scoped_worker_lineage import (
+              BASE, PATCHES, transform
+          )
+          from patch_nexaris_scoped_worker_syscall_gate import (
+              RELATIVE as GATE_PATH, patch as deny_global_syscalls
+          )
+          from patch_nexaris_nyxian_jit_probe import apply as patch_jit_probe
+          sys.path.insert(0,'scripts/tests')
+          upstream=Path('build/pinned-Nyxian')
+          # Catch ALL exact-upstream JIT canary patch drift before a native
+          # build spends time compiling keyboard, Rust or CoreCompiler.
+          patch_jit_probe(upstream, check=True)
+          patch_jit_probe(upstream, check=False)
+          jit_manager=(upstream/'Nyxian/LindChain/ProcEnvironment/PEProcessManager.m').read_text()
+          assert 'NSString *jitGateKey' in jit_manager
+          assert 'NEXARIS_GUEST_JIT_GATE' in jit_manager
+          print('PASS: exact pinned Nyxian JIT canary patch applied end to end')
+          revised=patch((upstream / RELATIVE).read_text())
+          assert revised.count('NexarisSelectScopedROMWorker') == 2
+          assert 'if(extension == nil) { return nil; }' in revised
+          assert 'return PEGetNSExtension();' in revised
+          contents={name:(upstream/name).read_text() for name in PATCHES}
+          p=upstream/PERMISSIONS_PATH
+          contents[PERMISSIONS_PATH]=strip_permissions(p.read_text())
+          child=transform(contents)
+          assert 'uint8_t nexarisROMWorkerSlot;' in child[str(BASE/'Surface/proc/def.h')]
+          assert 'child_new->nyx.nexarisROMWorkerSlot = nexarisWorkerSlot;' in child[str(BASE/'Surface/proc/spawn.m')]
+          assert 'effectiveSlot = parentSlot;' in child[str(BASE/'PEProcess.m')]
+          assert '[restrictedItems setObject:@[] forKey:@"PEFilePermissions"]' in child[str(BASE/'PEProcess.m')]
+          from test_nexaris_scoped_worker_syscall_syntax import assert_no_nested_or_unclosed_comments
+          original_broker=(upstream/GATE_PATH).read_text()
+          broker=deny_global_syscalls(original_broker)
+          region=broker[broker.index('        has_proc = true;'):broker.index('        task_special_port_t flavour')]
+          assert_no_nested_or_unclosed_comments(region)
+          assert 'if(proc_snapshot->nyx.nexarisROMWorkerSlot != 0)' in broker
+          assert 'err = EPERM;' in broker and 'goto cleanup;' in broker
+          print('PASS: pinned Nyxian A/B process lineage and privileged syscall denial')
+          PY
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_active_rom_boot_proof.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_guest_render_receipt.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_my_device_cold_start_and_nyxian_install.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_rom_startup_recovery.py -v
+          CHECKS
+          result=0
+          bash /tmp/nexaris-rom-worker-check.sh > build/Nexaris-ROM-worker-validation-private.log 2>&1 || result=$?
+          if (( result != 0 )); then
+            echo "::error::ROM worker tests failed; private diagnostics only."
+            exit "$result"
+          fi
+          echo "PASS: restricted A/B worker staging and signed entitlement policy tests."
+      - name: Return PRIVATE results to Nexaris PR 44
+        if: always()
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || exit 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          f=Path('build/Nexaris-ROM-worker-validation-private.log')
+          lines=f.read_text(errors='replace').splitlines() if f.exists() else []
+          out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
+               'Pinned source: 3ce59884495ad6128e81bc37f44b5c36a0988f68','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Private diagnostics:']
+          hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
+          if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
+          out += ['- '+line for line in hits[-50:]] if hits else ['- No errors found.']
+          Path('/tmp/nexaris-worker-tests-summary.md').write_text('\n'.join(out))
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris --body-file /tmp/nexaris-worker-tests-summary.md >/dev/null
+      # Keep all private source and logs off public Actions artifacts.

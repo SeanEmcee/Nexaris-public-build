@@ -4,11 +4,17 @@ name: Nexaris private-source compile on public runners
 # Full unsigned iOS build only runs by manual workflow_dispatch.
 on:
   push:
-    branches: [main]
+    branches: [main, feature/nyxian-source-ref-routing-20261120]
     paths:
       - .github/workflows/nexaris-private-compile.yml
       - .github/nexaris-native-build-request.txt
   workflow_dispatch:
+    inputs:
+      private_source_ref:
+        description: "Private Nexaris branch/tag/commit to compile"
+        type: string
+        required: true
+        default: "fix/urlos-direct-first-frame-20261119"
 
 permissions:
   contents: read
@@ -38,6 +44,8 @@ jobs:
     timeout-minutes: 20
     outputs:
       verified_private_sha: ${{ steps.capture_private_sha.outputs.sha }}
+      full_source_green: ${{ steps.full_suite.outputs.green }}
+      build23_green: ${{ steps.build23.outputs.green }}
     steps:
       - name: Require all private-access and output secrets before macOS
         shell: bash
@@ -58,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: feature/nexaris-unified-app
+          ref: ${{ inputs.private_source_ref || 'fix/urlos-direct-first-frame-20261119' }}
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: recursive
@@ -70,22 +78,93 @@ jobs:
         run: |
           set -euo pipefail
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Run complete private source regression gate before macOS
+      - name: Run full private regressions (record failures; do not certify release)
+        id: full_suite
         shell: bash
         working-directory: source
         run: |
           set -euo pipefail
           mkdir -p build
-          python3 -m unittest discover -s scripts/tests -p 'test_*.py' > build/Nexaris-regression-gate.log 2>&1 || {
-              echo "::error::Nexaris full private regression suite failed; macOS build blocked."
-              exit 1
-            }
-          echo "PASS: full Nexaris source regression suite."
-      - name: Run targeted Build 23 tests before paying for macOS time
+          code=0
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' \
+            > build/Nexaris-regression-gate.log 2>&1 || code=$?
+          if (( code )); then
+            echo "green=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Broad Nexaris regression suite FAILED. Diagnostic unsigned build may continue but release cannot pass."
+          else
+            echo "green=true" >> "$GITHUB_OUTPUT"
+            echo "PASS: full private Nexaris regression suite."
+          fi
+      - name: Mandatory ROM isolation and file-broker regression gate
         shell: bash
         working-directory: source
         run: |
           set -euo pipefail
+          for suite in \
+            test_nexaris_scoped_rom_workers.py \
+            test_nexaris_scoped_worker_dispatch.py \
+            test_nexaris_scoped_worker_lineage.py \
+            test_nexaris_scoped_worker_signing.py \
+            test_nexaris_scoped_rom_slot_groups.py \
+            test_nexaris_worker_embedded_provisioning.py \
+            test_nexaris_scoped_worker_syscall_syntax.py \
+            test_nexaris_scoped_rom_ipa.py \
+            test_nexaris_rom_filesystem_confinement_gate.py \
+            test_nexaris_rom_rootfd_semantics.py; do
+            if ! python3 -m unittest discover -s scripts/tests -p "$suite" \
+              > "build/test-$suite.log" 2>&1; then
+              echo "::error::Mandatory ROM isolation source test failed. See private diagnostics."
+              exit 1
+            fi
+            echo "PASS: mandatory ROM isolation $suite"
+          done
+      - name: Mandatory Nexaris ROM launch integration source gate
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          python3 scripts/check_nexaris_integrations.py \
+            > build/Nexaris-integration-contracts-private.log 2>&1 || {
+            echo "::error::Native Nexaris source contract gate failed before Xcode; private diagnostics retained."
+            exit 1
+          }
+          echo "PASS: Nexaris host, ROM workspace and live guest launch integration contracts."
+      - name: Require all pinned Nyxian JIT and A/B worker patches to apply before Xcode
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git \
+            build/pinned-Nyxian-patch-preflight > /dev/null 2>&1
+          git -C build/pinned-Nyxian-patch-preflight fetch --depth=1 origin \
+            9236c22f146a0f63bb597e629573e151ae4d4df7 > /dev/null 2>&1
+          git -C build/pinned-Nyxian-patch-preflight checkout --detach \
+            9236c22f146a0f63bb597e629573e151ae4d4df7 > /dev/null 2>&1
+          python3 - <<'PY' > build/Nexaris-pinned-patch-preflight-private.log 2>&1
+          from pathlib import Path
+          import sys
+          sys.path.insert(0,'scripts')
+          from patch_nexaris_nyxian_jit_probe import apply as probe
+          from patch_nexaris_scoped_worker_dispatch import apply as dispatch
+          from patch_nexaris_scoped_worker_permissions import apply as permissions
+          from patch_nexaris_scoped_worker_lineage import apply as lineage
+          from patch_nexaris_scoped_worker_syscall_gate import apply as syscall_gate
+          checkout=Path('build/pinned-Nyxian-patch-preflight')
+          probe(checkout,check=False)
+          dispatch(checkout,check=False)
+          permissions(checkout,check=False)
+          lineage(checkout,check=False)
+          syscall_gate(checkout,check=False)
+          print('PASS: pinned Nyxian JIT canary and five scoped worker security patch paths')
+          PY
+          echo "PASS: exact pinned native source patch application before macOS Xcode."
+      - name: Run Build 23 source diagnostics (retain failed contracts)
+        id: build23
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          failed=0
           mkdir -p build
           for suite in \
             test_nexaris_metal_toolchain_preflight.py \
@@ -99,14 +178,18 @@ jobs:
             test_nexaris_sideinstaller_ffi_cache.py; do
             if ! python3 -m unittest discover -s scripts/tests -p "$suite" \
               > "build/test-$suite.log" 2>&1; then
-              echo "::error::Private test suite $suite failed. No private logs uploaded publicly."
-              exit 1
+              echo "::warning::Private Build 23 test failed: $suite"
+              failed=1
+            else
+              echo "PASS: $suite"
             fi
-            echo "PASS $suite"
           done
+          if (( failed )); then echo "green=false" >> "$GITHUB_OUTPUT"
+          else echo "green=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Preserve failed preflight diagnostics inside PRIVATE Nexaris only
-        if: failure()
+        if: steps.full_suite.outputs.green == 'false' || steps.build23.outputs.green == 'false' || failure()
         working-directory: source
         shell: bash
         env:
@@ -155,8 +238,12 @@ jobs:
       NEXARIS_ENABLE_NATIVE_NYXIAN: "1"
       NEXARIS_ENABLE_NATIVE_LIVEPROCESS: "0"
       NEXARIS_ENABLE_GUEST_PROBE: "0"
-      # Strict source-test validation; do not suppress failures during release builds.
-      NEXARIS_FIRST_COMPILE: "0"
+      # Diagnostic compile-first: preserve source failures as RED but reach
+      # Xcode and collect native compiler/linker evidence. This is NOT a
+      # release build and its final CI outcome remains failure when tests fail.
+      # Only a separately verified iPhone launch can certify ROM functionality.
+      # Diagnostic build requested after the 106/106 A/B and IPA contract CI gate.
+      NEXARIS_FIRST_COMPILE: "1"
       NEXARIS_BUILD_MODE: "full"
       # Fail fast on Rap Keys native iPhoneOS compiler errors before the full Nyxian build.
       NEXARIS_KEYBOARD_COMPILE_FIRST: "1"
@@ -164,6 +251,9 @@ jobs:
       # ROM integrity test is explicit. The actual native Nyxian LiveProcess
       # extension is provided by the Nyxian target, not the alternate LC path.
       NEXARIS_ROM_HASH_SELFTEST: "1"
+      # Include both separate unsigned A/B worker extension identities.
+      # This does not enable guest commands, device signing or a security claim.
+      NEXARIS_STAGE_SCOPED_ROM_WORKERS: "1"
       NEXARIS_UPSTREAM_GITHUB_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -175,11 +265,12 @@ jobs:
           test "${NEXARIS_ENABLE_NATIVE_NYXIAN}" = 1
           test "${NEXARIS_ENABLE_NATIVE_LIVEPROCESS}" = 0
           test "${NEXARIS_ENABLE_GUEST_PROBE}" = 0
-          test "${NEXARIS_FIRST_COMPILE}" = 0
+          test "${NEXARIS_FIRST_COMPILE}" = 1
           test "${NEXARIS_BUILD_MODE}" = full
           test "${NEXARIS_KEYBOARD_COMPILE_FIRST}" = 1
           test "${NEXARIS_CACHE_PRIME_ONLY}" = 0
           test "${NEXARIS_ROM_HASH_SELFTEST}" = 1
+          test "${NEXARIS_STAGE_SCOPED_ROM_WORKERS}" = 1
           echo "Full native Nyxian build selected with Rap Keys compile-first (Nyxian supplies its own LiveProcess.appex)."
       - name: Checkout original private Nexaris without publishing it
         id: private_checkout
@@ -256,6 +347,7 @@ jobs:
           }
           echo "Private pinned compiler and ARM64 preflight passed."
       - name: Compile original Nexaris app, Nyxian and embedded Rap Keys
+        id: native_compile
         shell: bash
         working-directory: source
         env:
@@ -271,15 +363,23 @@ jobs:
             --output build/Nexaris-native-diagnostics.json \
             > /dev/null 2>&1 || true
           if (( status != 0 )); then
-            # Print only the trailing build diagnostics, avoiding credentials
-            # and proprietary source dumps. Retain full log in PRIVATE release.
-            echo "::group::Native build error tail (last 100 lines)"
-            tail -n 100 build/Nexaris-native-build.log || true
-            echo "::endgroup::"
-            echo "::error::Native build failed; the private release contains diagnostics."
-            exit "$status"
+            # Some legacy static source assertions are known to fail. The
+            # build script's compile-first mode returns nonzero AFTER actual
+            # compilation and bundle checks if any still failed. Permit
+            # PACKAGING FOR DIAGNOSTICS ONLY if the real main app was built.
+            # Any real compile/link error or missing artifact stays fatal.
+            app=build/DerivedData/Build/Products/Release-iphoneos/Nexaris.app
+            if [[ "${NEXARIS_FIRST_COMPILE}" == "1" ]] &&
+               [[ -s "$app/Nexaris" ]] &&
+               grep -Fq '** BUILD SUCCEEDED **' build/Nexaris-native-build.log &&
+               xcrun lipo "$app/Nexaris" -verify_arch arm64 >/dev/null 2>&1; then
+              echo "::warning::Unsigned native ARM64 Nexaris app exists, but source regression checks FAILED. Continue to package PRIVATE diagnostic IPA only."
+            else
+              echo "::error::Native build FAILED before a verifiable ARM64 app was produced (exit $status); private compiler logs retained."
+              exit "$status"
+            fi
           fi
-          echo "Native Xcode compilation and postbuild checks passed."
+          echo "Native compile stage complete; release readiness still depends on ALL source gates, Apple signing and iPhone validation."
       - name: Package real unsigned IPA, validate the ZIP and checksum
         shell: bash
         working-directory: source
@@ -302,16 +402,20 @@ jobs:
           python3 scripts/verify_nexaris_ipa_archive.py \
             build/Nexaris-Nyxian-private-unsigned.ipa --variant nyxian \
             >> build/Nexaris-package-checks.log 2>&1
+          # The A/B worker stage must survive the ACTUAL ZIP packaging;
+          # independently verify IDs, executable byte hashes, and absence
+          # of forged signatures. Not a signed-IPA or device sandbox proof.
+          if [[ "${NEXARIS_STAGE_SCOPED_ROM_WORKERS:-0}" == "1" ]]; then
+            python3 scripts/verify_nexaris_scoped_rom_ipa.py \
+              --ipa build/Nexaris-Nyxian-private-unsigned.ipa \
+              >> build/Nexaris-package-checks.log 2>&1 || {
+              echo "::error::A/B worker bundle validation failed inside packaged unsigned IPA."
+              exit 1
+            }
+          fi
           ( cd build && shasum -a 256 Nexaris-Nyxian-private-unsigned.ipa \
             > Nexaris-Nyxian-private-unsigned.ipa.sha256 )
           echo "Verified unsigned IPA packaged locally, NOT publicly published."
-      - name: Save only public Cargo crate downloads for later jobs
-        if: always()
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          key: nexaris-public-crates-x266-v1-${{ github.run_id }}
-          path: ~/.cargo/registry
       # DO NOT upload private logs or IPA as public Actions artifacts.
       # Store them as a DRAFT release of the original PRIVATE repository.
       - name: Deliver logs and IPA privately as a draft release
@@ -326,6 +430,8 @@ jobs:
           for f in \
             build/Nexaris-metal.log \
             build/Nexaris-native-preflight.log \
+            build/Nexaris-integration-contracts-private.log \
+            build/Nexaris-pinned-patch-preflight-private.log \
             build/Nexaris-native-build.log \
             build/Nexaris-native-diagnostics.json \
             build/Nexaris-package-checks.log \
@@ -344,3 +450,86 @@ jobs:
             --title "Nexaris private CI #$GITHUB_RUN_ID" --draft \
             --notes "Private unsigned build output. Original source commit: $source_sha. Signed device installation and ROM execution NOT verified."
           echo "Output stored as a draft release inside the PRIVATE Nexaris repository."
+      - name: Save only public Cargo crate downloads for later jobs
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          key: nexaris-public-crates-x266-v1-${{ github.run_id }}
+          path: ~/.cargo/registry
+      - name: Report actual native build stop point to PRIVATE Nexaris PR
+        if: always() && steps.native_compile.outcome == 'failure' && steps.private_checkout.outcome == 'success'
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || exit 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re
+          f=Path('build/Nexaris-native-build.log')
+          lines=f.read_text(errors='replace').splitlines() if f.is_file() else []
+          # A full build can contain thousands of unittest failures BEFORE
+          # native compiler execution. Report the actual stop-point last.
+          patterns=[
+              re.compile(p,re.I) for p in (
+                r'Nyxian native runtime setup blocked:',
+                r'Swift.*error:',r'fatal error:',r'error: .+',
+                r'\\*\\* BUILD FAILED \\*\\*',r'Undefined symbols for architecture',
+                r'ld: .+',r'clang: error:',r'make: \\*\\*\\*',
+                r'Native .* failed',
+              )
+          ]
+          events=[(i,line[:500]) for i,line in enumerate(lines)
+                  if any(p.search(line) for p in patterns)
+                  and not line.startswith(('ERROR: test_', 'FAIL: test_',
+                                             'AssertionError:'))]
+          # Source-suite failure traces are not Xcode errors. Find last 12
+          # build errors, plus the very end of the log, to locate blockers.
+          out=[
+              '### Nexaris private native diagnostic — failed',
+              '',
+              'GitHub Actions run: '+__import__('os').getenv('GITHUB_RUN_ID',''),
+              'Automatic private report; NOT signed or on-device validated.',
+              '',
+              'Last actual native failure candidates:',
+          ]
+          for i,line in events[-12:]:
+              out.extend(['- Log line '+str(i+1)+': '+line])
+          if not events:
+              out.append('- No known compiler failure signature; inspect final build lines.')
+          out.extend(['','Final 45 private log lines:','```text'])
+          out.extend(line[:450] for line in lines[-45:])
+          out.append('```')
+          diag=Path('build/Nexaris-native-diagnostics.json')
+          if diag.is_file():
+              try:
+                  data=json.loads(diag.read_text())
+                  out.append('')
+                  out.append('Reported stage: '+str(data.get('status','unknown')))
+                  out.append('Build exit code: '+str(data.get('build_exit_code','unknown')))
+              except (OSError,ValueError):
+                  pass
+          Path('/tmp/nexaris-native-stop-private.md').write_text(
+              '\n'.join(out)[:33000]
+          )
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris \
+            --body-file /tmp/nexaris-native-stop-private.md >/dev/null
+          rm -f /tmp/nexaris-native-stop-private.md
+          echo "Compiler diagnostic forwarded to PRIVATE Nexaris PR #44."
+      - name: Keep full-release validation FAILED when broad regressions remain
+        if: always() && needs.private-preflight.result == 'success'
+        shell: bash
+        env:
+          FULL_SOURCE_GREEN: ${{ needs.private-preflight.outputs.full_source_green }}
+          BUILD23_GREEN: ${{ needs.private-preflight.outputs.build23_green }}
+        run: |
+          if [[ "$FULL_SOURCE_GREEN" != "true" || "$BUILD23_GREEN" != "true" ]]; then
+            echo "::error::The native IPA is DIAGNOSTIC ONLY; broad regression gates remain RED."
+            exit 1
+          fi
+          echo "Source regressions passed. Device signing and sandbox verification remain independent blockers."
+
