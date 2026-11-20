@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: 67c3a94f9604dd409d15b9a785e13088cb447ab1
+          ref: 785d20fc3c974d6f3b3313ec689c425984f744a4
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -34,14 +34,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          set +e
-          {
-            python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_rom_workers.py -v
-            python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_dispatch.py -v
-            git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/pinned-Nyxian
-            git -C build/pinned-Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
-            git -C build/pinned-Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
-            python3 - <<'PY'
+          # Run with errexit INSIDE the test runner. A prior grouped
+          # command with set +e could falsely report success if an early
+          # test failed but the final source probe succeeded.
+          cat > /tmp/nexaris-rom-worker-check.sh <<'CHECKS'
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_rom_workers.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_dispatch.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_lineage.py -v
+          git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/pinned-Nyxian
+          git -C build/pinned-Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
+          git -C build/pinned-Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
+          python3 - <<'PY'
           import sys
           from pathlib import Path
           sys.path.insert(0, 'scripts')
@@ -49,20 +53,27 @@ jobs:
           from patch_nexaris_scoped_worker_permissions import (
               RELATIVE as PERMISSIONS_PATH, patch as strip_permissions
           )
-          original = (Path('build/pinned-Nyxian') / RELATIVE).read_text()
-          revised = patch(original)
+          from patch_nexaris_scoped_worker_lineage import (
+              BASE, PATCHES, transform
+          )
+          upstream=Path('build/pinned-Nyxian')
+          revised=patch((upstream / RELATIVE).read_text())
           assert revised.count('NexarisSelectScopedROMWorker') == 2
           assert 'if(extension == nil) { return nil; }' in revised
           assert 'return PEGetNSExtension();' in revised
-          process = (Path('build/pinned-Nyxian') / PERMISSIONS_PATH).read_text()
-          restricted = strip_permissions(process)
-          assert '[restrictedItems setObject:@[] forKey:@"PEFilePermissions"]' in restricted
-          assert 'else if(sb_identity->filePermissions != NULL)' in restricted
-          print('PASS: exact pinned Nyxian worker selector and zero-inherited-grants patches')
+          contents={name:(upstream/name).read_text() for name in PATCHES}
+          p=upstream/PERMISSIONS_PATH
+          contents[PERMISSIONS_PATH]=strip_permissions(p.read_text())
+          child=transform(contents)
+          assert 'uint8_t nexarisROMWorkerSlot;' in child[str(BASE/'Surface/proc/def.h')]
+          assert 'child_new->nyx.nexarisROMWorkerSlot = nexarisWorkerSlot;' in child[str(BASE/'Surface/proc/spawn.m')]
+          assert 'effectiveSlot = parentSlot;' in child[str(BASE/'PEProcess.m')]
+          assert '[restrictedItems setObject:@[] forKey:@"PEFilePermissions"]' in child[str(BASE/'PEProcess.m')]
+          print('PASS: exact upstream A/B selector, no inherited grants and kernel process lineage')
           PY
-          } > build/Nexaris-ROM-worker-validation-private.log 2>&1
-          result=$?
-          set -e
+          CHECKS
+          result=0
+          bash /tmp/nexaris-rom-worker-check.sh > build/Nexaris-ROM-worker-validation-private.log 2>&1 || result=$?
           if (( result != 0 )); then
             echo "::error::ROM worker tests failed; private diagnostics only."
             exit "$result"
@@ -83,7 +94,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: 67c3a94f9604dd409d15b9a785e13088cb447ab1','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: 785d20fc3c974d6f3b3313ec689c425984f744a4','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
