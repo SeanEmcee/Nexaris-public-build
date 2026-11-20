@@ -277,12 +277,12 @@ jobs:
             --output build/Nexaris-native-diagnostics.json \
             > /dev/null 2>&1 || true
           if (( status != 0 )); then
-            # Print only the trailing build diagnostics, avoiding credentials
-            # and proprietary source dumps. Retain full log in PRIVATE release.
-            echo "::group::Native build error tail (last 100 lines)"
-            tail -n 100 build/Nexaris-native-build.log || true
-            echo "::endgroup::"
-            echo "::error::Native build failed; the private release contains diagnostics."
+            # GitHub Actions logs of this PUBLIC repository are public.
+            # Never print arbitrary Swift/Xcode/compiler error text: it may
+            # contain private source fragments, local paths or tool secrets.
+            # Detailed diagnostics are retained ONLY in the private draft
+            # release; the public run reports an exit code and category.
+            echo "::error::Native build failed (exit $status). Inspect the private Nexaris draft release for compiler diagnostics."
             exit "$status"
           fi
           echo "Native Xcode compilation and postbuild checks passed."
