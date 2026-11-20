@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: 785d20fc3c974d6f3b3313ec689c425984f744a4
+          ref: 05f052cb5cf12f4a578403ab3823a50837712b27
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -56,6 +56,9 @@ jobs:
           from patch_nexaris_scoped_worker_lineage import (
               BASE, PATCHES, transform
           )
+          from patch_nexaris_scoped_worker_syscall_gate import (
+              RELATIVE as GATE_PATH, patch as deny_global_syscalls
+          )
           upstream=Path('build/pinned-Nyxian')
           revised=patch((upstream / RELATIVE).read_text())
           assert revised.count('NexarisSelectScopedROMWorker') == 2
@@ -69,7 +72,10 @@ jobs:
           assert 'child_new->nyx.nexarisROMWorkerSlot = nexarisWorkerSlot;' in child[str(BASE/'Surface/proc/spawn.m')]
           assert 'effectiveSlot = parentSlot;' in child[str(BASE/'PEProcess.m')]
           assert '[restrictedItems setObject:@[] forKey:@"PEFilePermissions"]' in child[str(BASE/'PEProcess.m')]
-          print('PASS: exact upstream A/B selector, no inherited grants and kernel process lineage')
+          broker=deny_global_syscalls((upstream/GATE_PATH).read_text())
+          assert 'if(proc_snapshot->nyx.nexarisROMWorkerSlot != 0)' in broker
+          assert 'err = EPERM;' in broker and 'goto cleanup;' in broker
+          print('PASS: pinned Nyxian A/B process lineage and privileged syscall denial')
           PY
           CHECKS
           result=0
@@ -94,7 +100,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: 785d20fc3c974d6f3b3313ec689c425984f744a4','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: 05f052cb5cf12f4a578403ab3823a50837712b27','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
