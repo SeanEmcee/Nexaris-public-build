@@ -1,0 +1,90 @@
+name: Rap Keys private Core XCTest on public macOS
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/rapkeys-private-core-xctests.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    if: github.actor == 'SeanEmcee'
+    runs-on: macos-26-intel
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+    steps:
+      - name: Checkout private unified Rap Keys source
+        id: private_checkout
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/rapkeys-parity-unified-20261119
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          path: source
+      - name: Use Xcode 26.6 and run real SwiftPM Core XCTest suite
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.6.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          mkdir -p build
+          result=0
+          swift test --package-path Modules/RapKeysCore \
+            > build/RapKeys-Core-XCTest.log 2>&1 || result=$?
+          printf '%s\n' "$result" > build/RapKeys-Core-XCTest.exit
+          if (( result != 0 )); then
+            echo "::error::Rap Keys Core XCTest failed. Compiler/test diagnostics kept private."
+            exit "$result"
+          fi
+          echo "PASS: SwiftPM RapKeysCore XCTest on macOS. iOS keyboard/device still unverified."
+      - name: Save all details to PRIVATE draft release and private PR comment
+        if: always() && steps.private_checkout.outcome == 'success'
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::warning::Missing private destination credentials; no public upload attempted."
+            exit 0
+          fi
+          log=build/RapKeys-Core-XCTest.log
+          if [[ -s "$log" ]]; then
+            gh release create "rapkeys-core-tests-$GITHUB_RUN_ID" "$log" \
+              --repo SeanEmcee/Nexaris --target "$(git rev-parse HEAD)" \
+              --draft --title "Rap Keys private Core XCTest $GITHUB_RUN_ID" \
+              --notes "Private SwiftPM test and typecheck log only. Native iPhoneOS keyboard compile is tracked separately."
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+          log = Path("build/RapKeys-Core-XCTest.log")
+          src = log.read_text(errors="replace") if log.exists() else ""
+          exitfile = Path("build/RapKeys-Core-XCTest.exit")
+          result = exitfile.read_text().strip() if exitfile.exists() else "incomplete"
+          lines = ["## Rap Keys Core XCTest — public macOS CI #" + os.environ["GITHUB_RUN_ID"], "",
+              "Runner: https://github.com/SeanEmcee/Nexaris-public-build/actions/runs/" + os.environ["GITHUB_RUN_ID"],
+              "Result: " + ("PASS" if result == "0" else "FAIL/INCOMPLETE") + " (SwiftPM host-macOS test; not iPhone).",
+              "", "### Test outcome lines"]
+          clean = []
+          for l in src.splitlines():
+              if ("Executed " in l and "tests" in l) or "Test Suite " in l and ("passed" in l or "failed" in l) or "Test run with " in l:
+                  clean.append(l[:300])
+          lines += ["- " + x for x in clean[-20:]] if clean else ["- No XCTest summary in log."]
+          errors = [l.strip() for l in src.splitlines()
+                    if re.search(r"(error:|^failed |^FAIL:|^ERROR:|Test Case .* failed)", l)]
+          if errors:
+              lines += ["", "### Failure excerpts (in private PR only)"]
+              for l in errors[:25]:
+                  l = re.sub(r"(?i)(bearer\\s+\\S+|(?:token|password|private[_-]?key)\\s*[:=]\\s*\\S+)", "[redacted]", l)
+                  lines.append("- " + l[:360])
+          lines += ["", "Full XCTest/compiler diagnostics remain in PRIVATE draft release `rapkeys-core-tests-" + os.environ["GITHUB_RUN_ID"] + "`."]
+          Path("build/RapKeys-Core-private-summary.md").write_text("\n".join(lines)+"\n")
+          PY
+          gh issue comment 46 --repo SeanEmcee/Nexaris \
+            --body-file build/RapKeys-Core-private-summary.md > /dev/null
+          echo "Rap Keys XCTest outcome posted to private PR #46."
