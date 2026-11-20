@@ -1,0 +1,77 @@
+name: Nexaris private ROM confinement broker regression (no public logs)
+on:
+  push:
+    branches: [feature/nyxian-source-ref-routing-20261120]
+    paths: ['.github/workflows/nexaris-rom-confinement-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos-confinement-tests:
+    if: github.actor == 'SeanEmcee'
+    runs-on: macos-26-intel
+    timeout-minutes: 15
+    steps:
+      - name: Require private source/output credentials
+        env:
+          SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          [[ -n "$SOURCE_TOKEN" && -n "$OUTPUT_TOKEN" ]] || exit 2
+      - name: Checkout exact private Nexaris revision
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: f0bf67117e5139cd1c8df6f4f7b167d22267c876
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          submodules: false
+          path: source
+      - name: Exercise macOS descriptor-scoped broker tests and source guards
+        id: test
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cat > /tmp/nexaris-rom-boundary-regression.sh <<'VERIFY'
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "f0bf67117e5139cd1c8df6f4f7b167d22267c876"
+          python3 scripts/prepare_nexaris_signed_guest_rom.py --check
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_rom_filesystem_confinement_gate.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_rom_rootfd_semantics.py -v
+          VERIFY
+          code=0
+          bash /tmp/nexaris-rom-boundary-regression.sh > build/Nexaris-ROM-confinement-guards-private.log 2>&1 || code=$?
+          if (( code != 0 )); then
+            echo "::error::Confinement source/POSIX regression failed (private diagnostics only)."
+            exit "$code"
+          fi
+          echo "PASS: source-level confinement guards and POSIX directory-FD tests. This does NOT certify arbitrary guest-process confinement."
+      - name: Post sanitized diagnostics only to PRIVATE PR
+        if: always()
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || exit 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          p=Path('build/Nexaris-ROM-confinement-guards-private.log')
+          s=p.read_text(errors='replace').splitlines() if p.exists() else []
+          status=os.environ.get('TEST_OUTCOME','not executed')
+          matches=[v[:400] for v in s if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',v)]
+          if status!='success' and not matches: matches=s[-20:]
+          result=['### ROM filesystem broker checks: '+status,
+                  '', 'Source: f0bf67117e5139cd1c8df6f4f7b167d22267c876',
+                  'These are source and POSIX tests; Nyxian guest execution remains unverified.',
+                  '', 'Relevant PRIVATE diagnostics:']
+          result += ['- '+v for v in matches[-45:]] if matches else ['- No failures.']
+          Path('/tmp/rom-confidential-regression.md').write_text('\n'.join(result))
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris --body-file /tmp/rom-confidential-regression.md > /dev/null
+      # Never upload source, logs, artifacts or binaries to public GitHub.
