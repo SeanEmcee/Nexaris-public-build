@@ -1,0 +1,206 @@
+name: Rap Keys private-source parity validation
+# Public runner, PRIVATE source & diagnostics. Never publish private artifacts.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rapkeys-private-parity-validation.yml
+      - .github/rapkeys-native-validation-request.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: rapkeys-private-parity-validation
+  cancel-in-progress: false
+
+jobs:
+  source-contracts:
+    if: github.actor == 'SeanEmcee'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      private_sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - name: Require private-source access without printing secrets
+        shell: bash
+        env:
+          PRIVATE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          test -n "$PRIVATE_TOKEN" || { echo "::error::Private source credential missing"; exit 2; }
+      - name: Checkout Rap Keys unified branch privately
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: feature/rapkeys-parity-unified-20261119
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          submodules: recursive
+          path: source
+      - name: Pin exact private source for native compiler
+        id: pin
+        shell: bash
+        working-directory: source
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Run Rap Keys integration and 90/95-point regression suites
+        id: tests
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          result=0
+          python3 -m unittest \
+            scripts.tests.test_rapkeys_unified_parity_contracts \
+            scripts.tests.test_rapkeys_90_source_contracts \
+            scripts.tests.test_rapkeys_95_source_contracts \
+            -v > build/RapKeys-parity-contracts.log 2>&1 || result=$?
+          if (( result != 0 )); then
+            echo "::error::Private Rap Keys regression contracts failed. Full traceback stays private."
+            exit "$result"
+          fi
+          echo "PASS: Rap Keys source contracts (private output withheld)."
+      - name: Parse Swift source syntax with installed Swift toolchain
+        if: success()
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          if ! command -v swiftc >/dev/null 2>&1; then
+            echo "Swift parser absent on Linux; native macOS compilation still required."
+            exit 0
+          fi
+          status=0
+          {
+            swiftc -frontend -parse Modules/RapKeysCore/Sources/RapKeysCore/*.swift
+            swiftc -frontend -parse Modules/RapKeysCore/Tests/RapKeysCoreTests/*.swift
+            swiftc -frontend -parse Modules/RapKeysKeyboardExtension/*.swift
+            swiftc -frontend -parse NativePreview/App/RapKeysLivePreview.swift
+          } > build/RapKeys-parity-swift-parse.log 2>&1 || status=$?
+          if (( status != 0 )); then
+            echo "::error::Rap Keys Swift syntax parse failed; details remain private."
+            exit "$status"
+          fi
+          echo "PASS: Swift syntax parse (not iOS SDK typechecking)."
+      - name: Save failed source QA details only to PRIVATE Nexaris release
+        if: failure()
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::warning::No private output credential; never upload private logs publicly."
+            exit 0
+          fi
+          files=()
+          for f in build/RapKeys-parity-contracts.log build/RapKeys-parity-swift-parse.log; do
+            [[ ! -s "$f" ]] || files+=("$f")
+          done
+          if (( ${#files[@]} > 0 )); then
+            gh release create "rapkeys-private-qa-$GITHUB_RUN_ID" "${files[@]}" \
+              --repo SeanEmcee/Nexaris --target "$(git rev-parse HEAD)" \
+              --draft --title "Rap Keys private QA $GITHUB_RUN_ID" \
+              --notes "Private Rap Keys source test diagnostics; no code or logs uploaded publicly."
+            echo "Private QA diagnostics saved in PRIVATE Nexaris draft release."
+          fi
+
+  native-keyboard:
+    if: >-
+      github.actor == 'SeanEmcee' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' &&
+        github.event.head_commit.message == 'ci: run Rap Keys native validation'))
+    needs: source-contracts
+    runs-on: macos-26-intel
+    timeout-minutes: 70
+    steps:
+      - name: Checkout identical pinned private source
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: ${{ needs.source-contracts.outputs.private_sha }}
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          submodules: recursive
+          path: source
+      - name: Select known Xcode 26.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.6.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+      - name: Stage isolated Rap Keys packages and generate Xcode target
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          status=0
+          {
+            if ! command -v xcodegen >/dev/null 2>&1; then
+              HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+            fi
+            python3 scripts/check_nexaris_keyboard_entitlements.py
+            python3 scripts/stage_nexaris_rapkeys.py
+            python3 scripts/prepare_nexaris_host_smoke.py
+            python3 scripts/prepare_nexaris_keyboard_compile_spec.py
+            xcodegen generate --spec Nexaris.keyboard-compile.generated.project.yml
+          } > build/RapKeys-native-setup.log 2>&1 || status=$?
+          if (( status != 0 )); then
+            echo "::error::Rap Keys private native setup failed; private diagnostics collected."
+            exit "$status"
+          fi
+          echo "PASS: isolated unsigned Rap Keys Xcode project prepared."
+      - name: Compile actual iPhoneOS keyboard extension (unsigned)
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          status=0
+          xcodebuild -project NexarisKeyboardCompile.xcodeproj \
+            -scheme NexarisKeyboard -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/RapKeysKeyboardDerivedData \
+            -clonedSourcePackagesDirPath build/SourcePackages \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build \
+            > build/RapKeys-native-compile.log 2>&1 || status=$?
+          python3 scripts/summarize_nexaris_keyboard_compile.py \
+            build/RapKeys-native-compile.log \
+            --output build/RapKeys-native-diagnostics.json \
+            > build/RapKeys-diagnostic-summary.log 2>&1 || true
+          if (( status != 0 )); then
+            echo "::error::Native Rap Keys extension compile failed. Logs stay PRIVATE."
+            exit "$status"
+          fi
+          test -s build/RapKeysKeyboardDerivedData/Build/Products/Release-iphoneos/NexarisKeyboard.appex/NexarisKeyboard
+          echo "PASS: actual Rap Keys extension compiled for iPhoneOS, unsigned. No device/visual parity claim."
+      - name: Store native diagnostics only in PRIVATE Nexaris draft release
+        if: always() && steps.checkout.outcome == 'success'
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::warning::Missing private output token; private artifacts cannot be uploaded."
+            exit 0
+          fi
+          files=()
+          for f in build/RapKeys-native-setup.log build/RapKeys-native-compile.log \
+                   build/RapKeys-native-diagnostics.json build/RapKeys-diagnostic-summary.log; do
+            [[ ! -s "$f" ]] || files+=("$f")
+          done
+          if (( ${#files[@]} > 0 )); then
+            gh release create "rapkeys-native-validation-$GITHUB_RUN_ID" "${files[@]}" \
+              --repo SeanEmcee/Nexaris --target "$(git rev-parse HEAD)" \
+              --draft --title "Rap Keys private native validation $GITHUB_RUN_ID" \
+              --notes "iPhoneOS unsigned keyboard compile diagnostics. Full XCTest, signed IPA, iPhone testing and Apple pixels are separate gates."
+            echo "Rap Keys native compiler diagnostics stored in PRIVATE draft release."
+          fi
