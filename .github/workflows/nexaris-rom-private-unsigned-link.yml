@@ -1,0 +1,99 @@
+name: Nexaris private ROM actual unsigned link (no public artifacts)
+on:
+  push:
+    branches: [feature/nyxian-source-ref-routing-20261120]
+    paths: ['.github/workflows/nexaris-rom-private-unsigned-link.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rom-unsigned-link:
+    if: github.actor == 'SeanEmcee'
+    runs-on: macos-26-intel
+    timeout-minutes: 60
+    steps:
+      - name: Verify private source and result credentials
+        env:
+          SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          [[ -n "$SOURCE_TOKEN" && -n "$OUTPUT_TOKEN" ]] || exit 2
+      - name: Checkout pinned PRIVATE Nexaris source
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: bbc251e4d02417d966926c9218bbe0696aa8d327
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          submodules: false
+          path: source
+      - name: Select matching Xcode 26.6
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.6.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+      - name: Test and compile actual unsigned ROM Mach-O
+        id: compile
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cat > /tmp/rom-unsigned-link.sh <<'LINK'
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "bbc251e4d02417d966926c9218bbe0696aa8d327"
+          python3 scripts/prepare_nexaris_signed_guest_rom.py --check
+          python3 -m unittest discover -s scripts/tests -p 'test_nexaris_rom_filesystem_confinement_gate.py' -v
+          python3 -m unittest discover -s scripts/tests -p 'test_nexaris_signed_guest_rom_preflight.py' -v
+          python3 -m unittest discover -s scripts/tests -p 'test_nexaris_rom_source_integration_completion.py' -v
+          mkdir -p build/vendor
+          git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/vendor/Nyxian
+          git -C build/vendor/Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
+          git -C build/vendor/Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
+          python3 scripts/prepare_nexaris_signed_guest_rom.py --nyxian build/vendor/Nyxian --output build/NexarisSignedROMPreflight --first-release --security-version 1 --reuse-preflight
+          make -C build/NexarisSignedROMPreflight guest-native-check
+          make -C build/NexarisSignedROMPreflight -j3 main
+          test -s build/NexarisSignedROMPreflight/main
+          xcrun lipo build/NexarisSignedROMPreflight/main -verify_arch arm64
+          xcrun nm -gU build/NexarisSignedROMPreflight/main > build/rom-exports-private.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          s={line.split()[-1].lstrip('_') for line in Path('build/rom-exports-private.txt').read_text().splitlines() if line.split()}
+          req=('NXSlotMain','NXSlotCreateWindow','NXSlotDidAppear','NexarisROMProcursusRequestV1','NexarisROMProcursusFreeV1','NexarisROMPresentDEBImporterV1','NexarisROMHasHostLaunchersV1','NexarisROMAttachAfterBootV1')
+          missing=set(req)-s
+          if missing: raise SystemExit("Missing guest ABI symbols: " + repr(sorted(missing)))
+          print("PASS: unsigned ARM64 ROM Mach-O links with all eight exported entrypoints")
+          PY
+          test ! -e build/NexarisSignedROMPreflight/rom.zip
+          LINK
+          result=0
+          bash /tmp/rom-unsigned-link.sh > build/rom-unsigned-link-private.log 2>&1 || result=$?
+          if (( result != 0 )); then
+            echo "::error::Unsigned ROM compile failed; diagnostics will be posted ONLY to the PRIVATE PR."
+            exit "$result"
+          fi
+          echo "PASS: actual unsigned ROM main linked; not signed, installed, or booted."
+      - name: Post result to PRIVATE Nexaris pull request
+        if: always()
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          LINK_OUTCOME: ${{ steps.compile.outcome }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || exit 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          p=Path('build/rom-unsigned-link-private.log')
+          lines=p.read_text(errors='replace').splitlines() if p.exists() else []
+          result=os.environ.get('LINK_OUTCOME','not executed')
+          out=['### ROM actual unsigned link: '+result,'','Source: bbc251e4d02417d966926c9218bbe0696aa8d327','Xcode 26.6; no public binaries, source, or logs.','ROM release signing and on-iPhone execution remain separate.','','Private compiler diagnostics:']
+          errors=[line[:450] for line in lines if re.search(r'error:|fatal error:|FAILED|Traceback|Error:|undefined symbol|not found',line,re.I)]
+          if result!='success' and not errors: errors=lines[-25:]
+          out += ['- '+v for v in errors[-60:]] if errors else ['- No errors found.']
+          Path('/tmp/rom-link-result.md').write_text('\n'.join(out))
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris --body-file /tmp/rom-link-result.md >/dev/null
+      # No public artifacts, caches, private build logs, or binaries.
