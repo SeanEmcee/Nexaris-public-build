@@ -44,6 +44,8 @@ jobs:
     timeout-minutes: 20
     outputs:
       verified_private_sha: ${{ steps.capture_private_sha.outputs.sha }}
+      full_source_green: ${{ steps.full_suite.outputs.green }}
+      build23_green: ${{ steps.build23.outputs.green }}
     steps:
       - name: Require all private-access and output secrets before macOS
         shell: bash
@@ -76,22 +78,49 @@ jobs:
         run: |
           set -euo pipefail
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Run complete private source regression gate before macOS
+      - name: Run full private regressions (record failures; do not certify release)
+        id: full_suite
         shell: bash
         working-directory: source
         run: |
           set -euo pipefail
           mkdir -p build
-          python3 -m unittest discover -s scripts/tests -p 'test_*.py' > build/Nexaris-regression-gate.log 2>&1 || {
-              echo "::error::Nexaris full private regression suite failed; macOS build blocked."
-              exit 1
-            }
-          echo "PASS: full Nexaris source regression suite."
-      - name: Run targeted Build 23 tests before paying for macOS time
+          code=0
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' \
+            > build/Nexaris-regression-gate.log 2>&1 || code=$?
+          if (( code )); then
+            echo "green=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Broad Nexaris regression suite FAILED. Diagnostic unsigned build may continue but release cannot pass."
+          else
+            echo "green=true" >> "$GITHUB_OUTPUT"
+            echo "PASS: full private Nexaris regression suite."
+          fi
+      - name: Mandatory ROM isolation and file-broker regression gate
         shell: bash
         working-directory: source
         run: |
           set -euo pipefail
+          for suite in \
+            test_nexaris_scoped_rom_workers.py \
+            test_nexaris_scoped_worker_dispatch.py \
+            test_nexaris_scoped_worker_lineage.py \
+            test_nexaris_scoped_worker_signing.py \
+            test_nexaris_rom_filesystem_confinement_gate.py \
+            test_nexaris_rom_rootfd_semantics.py; do
+            if ! python3 -m unittest discover -s scripts/tests -p "$suite" \
+              > "build/test-$suite.log" 2>&1; then
+              echo "::error::Mandatory ROM isolation source test failed. See private diagnostics."
+              exit 1
+            fi
+            echo "PASS: mandatory ROM isolation $suite"
+          done
+      - name: Run Build 23 source diagnostics (retain failed contracts)
+        id: build23
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          failed=0
           mkdir -p build
           for suite in \
             test_nexaris_metal_toolchain_preflight.py \
@@ -105,14 +134,18 @@ jobs:
             test_nexaris_sideinstaller_ffi_cache.py; do
             if ! python3 -m unittest discover -s scripts/tests -p "$suite" \
               > "build/test-$suite.log" 2>&1; then
-              echo "::error::Private test suite $suite failed. No private logs uploaded publicly."
-              exit 1
+              echo "::warning::Private Build 23 test failed: $suite"
+              failed=1
+            else
+              echo "PASS: $suite"
             fi
-            echo "PASS $suite"
           done
+          if (( failed )); then echo "green=false" >> "$GITHUB_OUTPUT"
+          else echo "green=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Preserve failed preflight diagnostics inside PRIVATE Nexaris only
-        if: failure()
+        if: steps.full_suite.outputs.green == 'false' || steps.build23.outputs.green == 'false' || failure()
         working-directory: source
         shell: bash
         env:
@@ -289,7 +322,7 @@ jobs:
             echo "::error::Native build failed (exit $status). Inspect the private Nexaris draft release for compiler diagnostics."
             exit "$status"
           fi
-          echo "Native Xcode compilation and postbuild checks passed."
+          echo "Native Xcode compilation and postbuild checks passed. Release status depends on full regression gate."
       - name: Package real unsigned IPA, validate the ZIP and checksum
         shell: bash
         working-directory: source
@@ -354,3 +387,16 @@ jobs:
             --title "Nexaris private CI #$GITHUB_RUN_ID" --draft \
             --notes "Private unsigned build output. Original source commit: $source_sha. Signed device installation and ROM execution NOT verified."
           echo "Output stored as a draft release inside the PRIVATE Nexaris repository."
+      - name: Keep full-release validation FAILED when broad regressions remain
+        if: always() && needs.private-preflight.result == 'success'
+        shell: bash
+        env:
+          FULL_SOURCE_GREEN: ${{ needs.private-preflight.outputs.full_source_green }}
+          BUILD23_GREEN: ${{ needs.private-preflight.outputs.build23_green }}
+        run: |
+          if [[ "$FULL_SOURCE_GREEN" != "true" || "$BUILD23_GREEN" != "true" ]]; then
+            echo "::error::The native IPA is DIAGNOSTIC ONLY; broad regression gates remain RED."
+            exit 1
+          fi
+          echo "Source regressions passed. Device signing and sandbox verification remain independent blockers."
+
