@@ -1,0 +1,107 @@
+name: Nexaris private ROM typecheck only
+
+on:
+  push:
+    branches: [feature/nyxian-source-ref-routing-20261120]
+    paths: ['.github/workflows/nexaris-rom-native-typecheck-only.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-typecheck:
+    if: github.actor == 'SeanEmcee'
+    runs-on: macos-26-intel
+    timeout-minutes: 25
+    steps:
+      - name: Private checkout credentials
+        env:
+          SOURCE_TOKEN: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          OUTPUT_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          [[ -n "$SOURCE_TOKEN" && -n "$OUTPUT_TOKEN" ]] || {
+            echo "::error::Private source/output credentials are not configured."
+            exit 2
+          }
+
+      - name: Checkout private Nexaris source
+        uses: actions/checkout@v4
+        with:
+          repository: SeanEmcee/Nexaris
+          ref: fix/urlos-direct-first-frame-20261119
+          token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          persist-credentials: false
+          submodules: false
+          path: source
+
+      - name: Select pinned Xcode 26.6
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.6.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+          xcrun --sdk iphoneos --show-sdk-path >/dev/null
+
+      - name: Typecheck only, never compile or sign
+        id: typecheck
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          status=0
+          (
+            set -euo pipefail
+            echo "SOURCE_SHA=$(git rev-parse HEAD)"
+            python3 scripts/prepare_nexaris_signed_guest_rom.py --check
+            python3 -m unittest discover -s scripts/tests -p 'test_nexaris_signed_guest_rom_preflight.py' -v
+            python3 -m unittest discover -s scripts/tests -p 'test_nexaris_rom_source_integration_completion.py' -v
+            mkdir -p build/vendor
+            git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/vendor/Nyxian
+            git -C build/vendor/Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
+            git -C build/vendor/Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
+            git -C build/vendor/Nyxian submodule update --init --depth=1 libroot TrollStore
+            python3 -m unittest discover -s scripts/tests -p 'test_nexaris_rom_native_abi_contract.py' -v
+            python3 scripts/prepare_nexaris_signed_guest_rom.py \
+              --nyxian build/vendor/Nyxian \
+              --output build/NexarisSignedROMPreflight \
+              --first-release --security-version 1 --reuse-preflight
+            make -C build/NexarisSignedROMPreflight guest-native-check
+            test ! -e build/NexarisSignedROMPreflight/main
+            test ! -e build/NexarisSignedROMPreflight/rom.zip
+          ) > build/Nexaris-ROM-native-typecheck-private.log 2>&1 || status=$?
+          if (( status != 0 )); then
+            echo "::error::Typecheck failed (exit $status); raw diagnostics remain private."
+            exit "$status"
+          fi
+          echo "PASS: Swift and Objective-C iPhoneOS typechecks. No IPA or signed ROM."
+
+      - name: Return results to original PRIVATE Nexaris PR
+        if: always()
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+          CHECK_STATUS: ${{ steps.typecheck.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$GH_TOKEN" ]] || exit 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          p=Path('build/Nexaris-ROM-native-typecheck-private.log')
+          lines=p.read_text(errors='replace').splitlines() if p.exists() else []
+          status=os.environ.get("CHECK_STATUS","not executed")
+          output=[f"### ROM native typecheck-only: {status}","",
+                  "Xcode 26.6; pinned Nyxian 0.12.1; no IPA or ROM compiled.","",
+                  "Relevant private diagnostics:"]
+          err=[s[:450] for s in lines
+               if re.search(r'\berror:|\bfatal error:|\bFAILED\b|Traceback|RuntimeError|Error:',s)]
+          if status!="success" and not err: err=lines[-30:]
+          output += ["- "+s for s in err[:60]] if err else ["- No errors found."]
+          Path('/tmp/nexaris-rom-typecheck.md').write_text('\n'.join(output))
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris \
+            --body-file /tmp/nexaris-rom-typecheck.md >/dev/null
+      # No artifacts or public compiler logs. No full build or signing.
