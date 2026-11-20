@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: b076377a2707a79cb78771b4b9971befcd185931
+          ref: c2f81c65854a2379838c357abb77a4fb5a9961da
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -64,8 +64,17 @@ jobs:
           from patch_nexaris_scoped_worker_syscall_gate import (
               RELATIVE as GATE_PATH, patch as deny_global_syscalls
           )
+          from patch_nexaris_nyxian_jit_probe import apply as patch_jit_probe
           sys.path.insert(0,'scripts/tests')
           upstream=Path('build/pinned-Nyxian')
+          # Catch ALL exact-upstream JIT canary patch drift before a native
+          # build spends time compiling keyboard, Rust or CoreCompiler.
+          patch_jit_probe(upstream, check=True)
+          patch_jit_probe(upstream, check=False)
+          jit_manager=(upstream/'Nyxian/LindChain/ProcEnvironment/PEProcessManager.m').read_text()
+          assert 'NSString *jitGateKey' in jit_manager
+          assert 'NEXARIS_GUEST_JIT_GATE' in jit_manager
+          print('PASS: exact pinned Nyxian JIT canary patch applied end to end')
           revised=patch((upstream / RELATIVE).read_text())
           assert revised.count('NexarisSelectScopedROMWorker') == 2
           assert 'if(extension == nil) { return nil; }' in revised
@@ -110,7 +119,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: b076377a2707a79cb78771b4b9971befcd185931','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: c2f81c65854a2379838c357abb77a4fb5a9961da','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
