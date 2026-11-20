@@ -19,11 +19,22 @@ jobs:
           set -euo pipefail
           [[ -n "$GH_TOKEN" ]] || { echo "::error::Private diagnostic token unavailable"; exit 2; }
           mkdir -p /tmp/nexaris-private-native-diagnostics
-          gh release download nexaris-actions-44766890621 \
-            --repo SeanEmcee/Nexaris \
-            --dir /tmp/nexaris-private-native-diagnostics \
-            --pattern 'Nexaris-native-build.log' \
-            --pattern 'Nexaris-native-diagnostics.json'
+          ready=0
+          for attempt in $(seq 1 15); do
+            if gh release download nexaris-actions-44767992071 \
+              --repo SeanEmcee/Nexaris \
+              --dir /tmp/nexaris-private-native-diagnostics \
+              --pattern 'Nexaris-native-build.log' \
+              --pattern 'Nexaris-native-diagnostics.json' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 8
+          done
+          [[ "$ready" == "1" ]] || {
+            echo "::error::Private native build diagnostics not yet published."
+            exit 2
+          }
           test -s /tmp/nexaris-private-native-diagnostics/Nexaris-native-build.log
           echo "Private diagnostic logs fetched; no source or details printed publicly."
       - name: Send focused Swift/Clang compiler failures to PRIVATE PR 44
@@ -42,7 +53,7 @@ jobs:
                   and not 'warning:' in line.lower()):
                   captured.append((i,line[:900]))
           output=['### Nexaris Native Xcode Diagnostic — FAILED','',
-                  'Source: private Nexaris build run 44766890621',
+                  'Source: private Nexaris build run 44767992071',
                   'The broad source regression suite also failed; this native build was diagnostic only.',
                   '',
                   'First compiler errors and nearby context (private only):','']
