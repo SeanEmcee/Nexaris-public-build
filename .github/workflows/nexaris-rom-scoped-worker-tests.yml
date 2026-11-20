@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: 45f850dfde0d53386b1d5548c9126d8604a53270
+          ref: b3914c7134c1921f10a42d421810072c3c9a93b7
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -42,6 +42,7 @@ jobs:
           python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_rom_workers.py -v
           python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_dispatch.py -v
           python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_lineage.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_signing.py -v
           git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/pinned-Nyxian
           git -C build/pinned-Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
           git -C build/pinned-Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
@@ -100,7 +101,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: 45f850dfde0d53386b1d5548c9126d8604a53270','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: b3914c7134c1921f10a42d421810072c3c9a93b7','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
