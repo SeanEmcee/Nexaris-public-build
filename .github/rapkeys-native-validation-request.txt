@@ -1,8 +1,8 @@
-Rap Keys Liquid Glass shared pill slider validation #4
+Rap Keys offline LLM catalog and hardware recommendation validation #5
 Private source: SeanEmcee/Nexaris feature/nexaris-unified-app
-Private head: fab918d0dd5895c0f12b7751a3876f6c8ace36e5
-All Studio sliders use white rounded glass pill thumbs and red filled tracks.
-Keyboard-contained UIKit sliders use corresponding white pill imagery and red tracks.
-Clear-to-Tinted remains independent of other sliders and preserves gradient colors.
-Run source regressions and native iPhoneOS keyboard extension compile; privacy safe.
-All private diagnostics remain inside PRIVATE Nexaris draft releases.
+Private head: 4908e526d8d9ee125efa4ff861f33b830d0a3dc3
+Verify 3 published SHA256-pinned GGUF downloads and native RAM/device detection.
+Verify offline model selector, per-model strengths and weaknesses, green/red display.
+Verify original one-use keyboard-to-host offline inference handoff and no cloud prompts.
+Run source regression suite, Swift syntax parse for all Rap Keys companion screens,
+and native iPhoneOS keyboard extension compilation. Private source stays private.
