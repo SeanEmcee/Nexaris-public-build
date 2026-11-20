@@ -4,7 +4,7 @@ name: Nexaris private-source compile on public runners
 # Full unsigned iOS build only runs by manual workflow_dispatch.
 on:
   push:
-    branches: [main]
+    branches: [main, feature/nyxian-source-ref-routing-20261120]
     paths:
       - .github/workflows/nexaris-private-compile.yml
       - .github/nexaris-native-build-request.txt
@@ -170,6 +170,9 @@ jobs:
       # ROM integrity test is explicit. The actual native Nyxian LiveProcess
       # extension is provided by the Nyxian target, not the alternate LC path.
       NEXARIS_ROM_HASH_SELFTEST: "1"
+      # Include both separate unsigned A/B worker extension identities.
+      # This does not enable guest commands, device signing or a security claim.
+      NEXARIS_STAGE_SCOPED_ROM_WORKERS: "1"
       NEXARIS_UPSTREAM_GITHUB_TOKEN: ${{ secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -186,6 +189,7 @@ jobs:
           test "${NEXARIS_KEYBOARD_COMPILE_FIRST}" = 1
           test "${NEXARIS_CACHE_PRIME_ONLY}" = 0
           test "${NEXARIS_ROM_HASH_SELFTEST}" = 1
+          test "${NEXARIS_STAGE_SCOPED_ROM_WORKERS}" = 1
           echo "Full native Nyxian build selected with Rap Keys compile-first (Nyxian supplies its own LiveProcess.appex)."
       - name: Checkout original private Nexaris without publishing it
         id: private_checkout
