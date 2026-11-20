@@ -396,6 +396,17 @@ jobs:
           python3 scripts/verify_nexaris_ipa_archive.py \
             build/Nexaris-Nyxian-private-unsigned.ipa --variant nyxian \
             >> build/Nexaris-package-checks.log 2>&1
+          # The A/B worker stage must survive the ACTUAL ZIP packaging;
+          # independently verify IDs, executable byte hashes, and absence
+          # of forged signatures. Not a signed-IPA or device sandbox proof.
+          if [[ "${NEXARIS_STAGE_SCOPED_ROM_WORKERS:-0}" == "1" ]]; then
+            python3 scripts/verify_nexaris_scoped_rom_ipa.py \
+              --ipa build/Nexaris-Nyxian-private-unsigned.ipa \
+              >> build/Nexaris-package-checks.log 2>&1 || {
+              echo "::error::A/B worker bundle validation failed inside packaged unsigned IPA."
+              exit 1
+            }
+          fi
           ( cd build && shasum -a 256 Nexaris-Nyxian-private-unsigned.ipa \
             > Nexaris-Nyxian-private-unsigned.ipa.sha256 )
           echo "Verified unsigned IPA packaged locally, NOT publicly published."
