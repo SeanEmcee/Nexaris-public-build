@@ -105,6 +105,43 @@ jobs:
             echo "PASS $suite"
           done
 
+      - name: Preserve failed preflight diagnostics inside PRIVATE Nexaris only
+        if: failure()
+        working-directory: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || exit 0
+          for report in build/Nexaris-regression-gate.log build/test-*.log; do
+            [[ -f "$report" ]] || continue
+            gh release create "nexaris-preflight-$GITHUB_RUN_ID" "$report" \
+              --repo SeanEmcee/Nexaris --target "$(git rev-parse HEAD)" \
+              --draft --title "Private Nexaris regression $GITHUB_RUN_ID" \
+              --notes "Private full-host source test failures. No public source artifacts." \
+              >/dev/null
+            break
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          log=Path('build/Nexaris-regression-gate.log')
+          if not log.exists(): raise SystemExit(0)
+          lines=log.read_text(errors='replace').splitlines()
+          out=["## Nexaris full preflight source-test failures",
+               "", "Run $GITHUB_RUN_ID (public runner; diagnostics private).", ""]
+          found=[]
+          for s in lines:
+              if s.startswith(('FAIL:', 'ERROR:', 'FAILED (')) or s.startswith('AssertionError:'):
+                  found.append(re.sub(r'/home/runner/work/[^ ]+/source/', '', s)[:500])
+          out += ["- "+s for s in found[:80]]
+          if not found: out.append("No individual failure summaries found; inspect private draft release.")
+          Path('/tmp/nexaris-preflight.md').write_text('\n'.join(out))
+          PY
+          gh issue comment 46 --repo SeanEmcee/Nexaris \
+            --body-file /tmp/nexaris-preflight.md >/dev/null
+
   build:
     if: >-
       github.actor == 'SeanEmcee' &&
