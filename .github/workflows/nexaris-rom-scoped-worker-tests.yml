@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: ce657361476d4cfc081e0e79b973c6fd4fcffcc2
+          ref: eaf8be583de2b6b84720945dfd6badfd788056aa
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
@@ -45,6 +45,7 @@ jobs:
           python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_lineage.py -v
           python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_signing.py -v
           python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_rom_slot_groups.py -v
+          python3 -m unittest discover -s scripts/tests -p test_nexaris_scoped_worker_syscall_syntax.py -v
           git clone --no-checkout --filter=blob:none https://github.com/emexlab/Nyxian.git build/pinned-Nyxian
           git -C build/pinned-Nyxian fetch --depth=1 origin 9236c22f146a0f63bb597e629573e151ae4d4df7
           git -C build/pinned-Nyxian checkout --detach 9236c22f146a0f63bb597e629573e151ae4d4df7
@@ -62,6 +63,7 @@ jobs:
           from patch_nexaris_scoped_worker_syscall_gate import (
               RELATIVE as GATE_PATH, patch as deny_global_syscalls
           )
+          sys.path.insert(0,'scripts/tests')
           upstream=Path('build/pinned-Nyxian')
           revised=patch((upstream / RELATIVE).read_text())
           assert revised.count('NexarisSelectScopedROMWorker') == 2
@@ -75,7 +77,11 @@ jobs:
           assert 'child_new->nyx.nexarisROMWorkerSlot = nexarisWorkerSlot;' in child[str(BASE/'Surface/proc/spawn.m')]
           assert 'effectiveSlot = parentSlot;' in child[str(BASE/'PEProcess.m')]
           assert '[restrictedItems setObject:@[] forKey:@"PEFilePermissions"]' in child[str(BASE/'PEProcess.m')]
-          broker=deny_global_syscalls((upstream/GATE_PATH).read_text())
+          from test_nexaris_scoped_worker_syscall_syntax import assert_no_nested_or_unclosed_comments
+          original_broker=(upstream/GATE_PATH).read_text()
+          broker=deny_global_syscalls(original_broker)
+          region=broker[broker.index('        has_proc = true;'):broker.index('        task_special_port_t flavour')]
+          assert_no_nested_or_unclosed_comments(region)
           assert 'if(proc_snapshot->nyx.nexarisROMWorkerSlot != 0)' in broker
           assert 'err = EPERM;' in broker and 'goto cleanup;' in broker
           print('PASS: pinned Nyxian A/B process lineage and privileged syscall denial')
@@ -103,7 +109,7 @@ jobs:
           f=Path('build/Nexaris-ROM-worker-validation-private.log')
           lines=f.read_text(errors='replace').splitlines() if f.exists() else []
           out=['### Scoped A/B ROM worker staging: '+os.getenv('OUTCOME','not run'),'',
-               'Pinned source: ce657361476d4cfc081e0e79b973c6fd4fcffcc2','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
+               'Pinned source: eaf8be583de2b6b84720945dfd6badfd788056aa','No signed workers, on-device proofs or actual guest sandbox execution yet.','',
                'Private diagnostics:']
           hits=[line[:600] for line in lines if re.search(r'FAIL:|ERROR:|Traceback|AssertionError|^Ran [0-9]+ tests|^OK$|^FAILED',line)]
           if os.getenv('OUTCOME')!='success' and not hits: hits=lines[-25:]
