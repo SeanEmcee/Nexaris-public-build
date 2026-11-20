@@ -29,7 +29,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SeanEmcee/Nexaris
-          ref: fix/urlos-direct-first-frame-20261119
+          # Pinned private audit head; never silently compile a moving branch.
+          ref: 42db3421ab0cc29df8609d88356cd924ec5a748e
           token: ${{ secrets.NEXARIS_PRIVATE_SOURCE_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
           persist-credentials: false
           submodules: false
