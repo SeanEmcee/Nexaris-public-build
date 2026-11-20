@@ -347,6 +347,7 @@ jobs:
           }
           echo "Private pinned compiler and ARM64 preflight passed."
       - name: Compile original Nexaris app, Nyxian and embedded Rap Keys
+        id: native_compile
         shell: bash
         working-directory: source
         env:
@@ -456,6 +457,69 @@ jobs:
         with:
           key: nexaris-public-crates-x266-v1-${{ github.run_id }}
           path: ~/.cargo/registry
+      - name: Report actual native build stop point to PRIVATE Nexaris PR
+        if: always() && steps.native_compile.outcome == 'failure' && steps.private_checkout.outcome == 'success'
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN:-}" ]] || exit 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re
+          f=Path('build/Nexaris-native-build.log')
+          lines=f.read_text(errors='replace').splitlines() if f.is_file() else []
+          # A full build can contain thousands of unittest failures BEFORE
+          # native compiler execution. Report the actual stop-point last.
+          patterns=[
+              re.compile(p,re.I) for p in (
+                r'Nyxian native runtime setup blocked:',
+                r'Swift.*error:',r'fatal error:',r'error: .+',
+                r'\\*\\* BUILD FAILED \\*\\*',r'Undefined symbols for architecture',
+                r'ld: .+',r'clang: error:',r'make: \\*\\*\\*',
+                r'Native .* failed',
+              )
+          ]
+          events=[(i,line[:500]) for i,line in enumerate(lines)
+                  if any(p.search(line) for p in patterns)
+                  and not line.startswith(('ERROR: test_', 'FAIL: test_',
+                                             'AssertionError:'))]
+          # Source-suite failure traces are not Xcode errors. Find last 12
+          # build errors, plus the very end of the log, to locate blockers.
+          out=[
+              '### Nexaris private native diagnostic — failed',
+              '',
+              'GitHub Actions run: '+__import__('os').getenv('GITHUB_RUN_ID',''),
+              'Automatic private report; NOT signed or on-device validated.',
+              '',
+              'Last actual native failure candidates:',
+          ]
+          for i,line in events[-12:]:
+              out.extend(['- Log line '+str(i+1)+': '+line])
+          if not events:
+              out.append('- No known compiler failure signature; inspect final build lines.')
+          out.extend(['','Final 45 private log lines:','```text'])
+          out.extend(line[:450] for line in lines[-45:])
+          out.append('```')
+          diag=Path('build/Nexaris-native-diagnostics.json')
+          if diag.is_file():
+              try:
+                  data=json.loads(diag.read_text())
+                  out.append('')
+                  out.append('Reported stage: '+str(data.get('status','unknown')))
+                  out.append('Build exit code: '+str(data.get('build_exit_code','unknown')))
+              except (OSError,ValueError):
+                  pass
+          Path('/tmp/nexaris-native-stop-private.md').write_text(
+              '\n'.join(out)[:33000]
+          )
+          PY
+          gh issue comment 44 --repo SeanEmcee/Nexaris \
+            --body-file /tmp/nexaris-native-stop-private.md >/dev/null
+          rm -f /tmp/nexaris-native-stop-private.md
+          echo "Compiler diagnostic forwarded to PRIVATE Nexaris PR #44."
       - name: Keep full-release validation FAILED when broad regressions remain
         if: always() && needs.private-preflight.result == 'success'
         shell: bash
