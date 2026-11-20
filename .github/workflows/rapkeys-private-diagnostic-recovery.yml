@@ -28,7 +28,7 @@ jobs:
           # The release is a DRAFT inside the PRIVATE Nexaris repository.
           # API asset download works independently of its untagged public URL.
           gh api -H "Accept: application/octet-stream" \
-            repos/SeanEmcee/Nexaris/releases/assets/770700672 \
+            repos/SeanEmcee/Nexaris/releases/assets/770813319 \
             > /tmp/rapkeys-private-recovery/diagnostics.json
           python3 - <<'PY'
           import json, pathlib, re
@@ -36,9 +36,9 @@ jobs:
           obj = json.loads(src.read_text(encoding="utf-8"))
           issues = obj.get("issues", [])
           out = [
-              "## Rap Keys native compiler result — public CI #44685957551",
+              "## Rap Keys native compiler result — public CI #44690970106",
               "",
-              "Public runner: https://github.com/SeanEmcee/Nexaris-public-build/actions/runs/44685957551",
+              "Public runner: https://github.com/SeanEmcee/Nexaris-public-build/actions/runs/44690970106",
               "The source contracts and isolated Xcode project generation passed; native iPhoneOS compile failed.",
               "",
               f"Parsed diagnostics: {obj.get('error_count', 'unknown')} errors, {obj.get('warning_count', 'unknown')} warnings.",
@@ -59,7 +59,7 @@ jobs:
           out += [
               "",
               "Complete native compiler log and JSON are in the PRIVATE draft release",
-              "`rapkeys-native-validation-44685957551`. No private files were uploaded to the public runner repository.",
+              "`rapkeys-native-validation-44690970106`. No private files were uploaded to the public runner repository.",
               "No IPA or Apple keyboard visual parity is certified by this failed compile.",
           ]
           pathlib.Path("/tmp/rapkeys-private-recovery/comment.md").write_text("\n".join(out)+"\n")
