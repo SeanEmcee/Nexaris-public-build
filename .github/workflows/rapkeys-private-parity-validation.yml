@@ -77,7 +77,9 @@ jobs:
             swiftc -frontend -parse Modules/RapKeysCore/Sources/RapKeysCore/*.swift
             swiftc -frontend -parse Modules/RapKeysCore/Tests/RapKeysCoreTests/*.swift
             swiftc -frontend -parse Modules/RapKeysKeyboardExtension/*.swift
-            swiftc -frontend -parse NativePreview/App/RapKeysLivePreview.swift
+            # Parse every companion view because shared sliders are used across
+            # all five Rap Keys tabs, editors and preview surfaces.
+            swiftc -frontend -parse NativePreview/App/*.swift
           } > build/RapKeys-parity-swift-parse.log 2>&1 || status=$?
           if (( status != 0 )); then
             echo "::error::Rap Keys Swift syntax parse failed; details remain private."
