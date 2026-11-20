@@ -1,0 +1,69 @@
+name: Rap Keys private compiler diagnostic recovery
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/rapkeys-private-diagnostic-recovery.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    if: github.actor == 'SeanEmcee'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.NEXARIS_PRIVATE_OUTPUT_TOKEN || secrets.NEXARIS_UPSTREAM_GITHUB_TOKEN }}
+    steps:
+      - name: Recover native Swift errors from private artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::Missing private output access"
+            exit 2
+          fi
+          mkdir -p /tmp/rapkeys-private-recovery
+          # The release is a DRAFT inside the PRIVATE Nexaris repository.
+          # API asset download works independently of its untagged public URL.
+          gh api -H "Accept: application/octet-stream" \
+            repos/SeanEmcee/Nexaris/releases/assets/770700672 \
+            > /tmp/rapkeys-private-recovery/diagnostics.json
+          python3 - <<'PY'
+          import json, pathlib, re
+          src = pathlib.Path("/tmp/rapkeys-private-recovery/diagnostics.json")
+          obj = json.loads(src.read_text(encoding="utf-8"))
+          issues = obj.get("issues", [])
+          out = [
+              "## Rap Keys native compiler result — public CI #44685957551",
+              "",
+              "Public runner: https://github.com/SeanEmcee/Nexaris-public-build/actions/runs/44685957551",
+              "The source contracts and isolated Xcode project generation passed; native iPhoneOS compile failed.",
+              "",
+              f"Parsed diagnostics: {obj.get('error_count', 'unknown')} errors, {obj.get('warning_count', 'unknown')} warnings.",
+              "",
+              "### Compiler diagnostics (private only)",
+          ]
+          if not issues:
+              out.append("No parsed errors; read the saved private full compiler log.")
+          for issue in issues[:30]:
+              kind = str(issue.get("severity", "unknown"))
+              category = str(issue.get("category", "unknown"))
+              source = pathlib.Path(str(issue.get("path", ""))).name
+              line = issue.get("line")
+              loc = f"{source}:{line}" if line else source
+              msg = str(issue.get("message", "")).replace("\r"," ").replace("\n"," ")
+              msg = re.sub(r"(?i)(bearer\\s+\\S+|(?:token|password|private[_-]?key)\\s*[:=]\\s*\\S+)", "[redacted]", msg)
+              out.append(f"- **{kind}** \`{category}\` \`{loc}\`: {msg[:500]}")
+          out += [
+              "",
+              "Complete native compiler log and JSON are in the PRIVATE draft release",
+              "`rapkeys-native-validation-44685957551`. No private files were uploaded to the public runner repository.",
+              "No IPA or Apple keyboard visual parity is certified by this failed compile.",
+          ]
+          pathlib.Path("/tmp/rapkeys-private-recovery/comment.md").write_text("\n".join(out)+"\n")
+          PY
+          gh issue comment 46 --repo SeanEmcee/Nexaris \
+            --body-file /tmp/rapkeys-private-recovery/comment.md >/dev/null
+          echo "Private Rap Keys compiler diagnostics posted to private PR #46."
